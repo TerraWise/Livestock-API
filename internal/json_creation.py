@@ -1,6 +1,10 @@
-def agro_zone(northOfTropicOfCapricorn=False, rainfallAbove600mm=False) -> dict:
+def agro_zone(
+    state: str = "wa_sw",
+    northOfTropicOfCapricorn: bool = False,
+    rainfallAbove600mm: bool = False,
+) -> dict:
     return {
-        "state": "wa_sw",
+        "state": state,
         "northOfTropicOfCapricorn": northOfTropicOfCapricorn,
         "rainfallAbove600": rainfallAbove600mm,
     }

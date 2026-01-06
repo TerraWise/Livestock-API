@@ -2,18 +2,19 @@ from internal.stock_class import create_sheep_json_data
 from internal.inv_extraction import extract_inventories_from_excel, extract_annual_data
 import os, openpyxl, glob, json, tempfile
 import requests as rq
-from pprint import pprint
 
 
 def main():
     file_path = glob.glob(os.path.join("input", "*.xlsx"))
 
     inventory_sheet = openpyxl.load_workbook(file_path[0], data_only=True)
-
-    seasonal_sheep = extract_inventories_from_excel(inventory_sheet, "sheep")
+    state = inventory_sheet["Client detail"].cell(17, 7).value
 
     json_data = create_sheep_json_data(
-        seasonal_sheep, northOfTropicOfCapricorn=False, rainfallAbove600mm=False
+        inventory_sheet,
+        state="_".join(state.lower().split()),
+        northOfTropicOfCapricorn=False,
+        rainfallAbove600mm=False,
     )
 
     json_data = extract_annual_data(inventory_sheet, json_data, "sheep")
