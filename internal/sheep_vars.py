@@ -2,22 +2,20 @@ from copy import deepcopy
 
 # Sheep Stock class list
 sheep_stock_classes = [
-    "rams",
-    "tradeRams",
-    "wethers",
-    "tradeWethers",
-    "maidenBreedingEwes",
-    "tradeBreedingEwes",
     "breedingEwes",
-    "tradeBreedingEwes",
-    "otherEwes",
-    "tradeOtherEwes",
     "eweLambs",
-    "tradeEweLambs",
     "wetherLambs",
+    "maidenBreedingEwes",
+    "otherEwes",
+    "rams",
+    "tradeBreedingEwes",
+    "tradeEweLambs",
+    "tradeMaidenBreedingEwes",
+    "tradeOtherEwes",
+    "tradeRams",
     "tradeWetherLambs",
-    "tradeEwes",
-    "tradeLambsAndHoggets",
+    "tradeWethers",
+    "wethers",
 ]
 
 # Stock class specific seasonal data

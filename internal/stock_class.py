@@ -5,6 +5,7 @@ from internal.sheep_vars import (
     sheep_annual_stock_class_data,
 )
 from internal.json_creation import agro_zone
+from internal.inv_extraction import extract_inventories_from_excel
 
 # Seasonal list
 seasons = ["autumn", "winter", "spring", "summer"]
@@ -15,7 +16,9 @@ class Livestock:
         self.species = species
 
         self.metadata = agro_zone(
-            kwargs["northOfTropicOfCapricorn"], kwargs["rainfallAbove600mm"]
+            kwargs["state"],
+            kwargs["northOfTropicOfCapricorn"],
+            kwargs["rainfallAbove600mm"],
         )
         # Create stock class data structure
         self.metadata[self.species] = [{"classes": {}}] * group
@@ -73,8 +76,9 @@ class Sheep(Livestock):
                     )
 
 
-def create_sheep_json_data(seasonal_sheep: list, group: int = 1, **kwargs) -> dict:
+def create_sheep_json_data(inventory_sheet, group: int = 1, **kwargs) -> dict:
     sheep = Sheep(group, **kwargs)
+    seasonal_sheep = extract_inventories_from_excel(inventory_sheet, sheep.species)
     sheep.stock_class_data(group, seasonal_sheep)
 
     return sheep.metadata
