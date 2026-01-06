@@ -1,13 +1,11 @@
-import os, openpyxl
-import openpyxl.worksheet
-import openpyxl.worksheet.worksheet
-from internal.sheep_vars import sheep_annual_stock_class_data
 from copy import deepcopy
+from openpyxl.worksheet.worksheet import Worksheet
+from openpyxl import Workbook
+
+from internal.sheep_vars import sheep_annual_stock_class_data
 
 
-def extract_inventories_from_excel(
-    inventory_sheet: openpyxl.Workbook, livestock: str
-) -> list:
+def extract_inventories_from_excel(inventory_sheet: Workbook, livestock: str) -> list:
     seasonal_data = []
 
     seasonal_data.append(extract_seasonal_data(inventory_sheet, livestock))
@@ -15,7 +13,7 @@ def extract_inventories_from_excel(
     return seasonal_data
 
 
-def extract_seasonal_data(inventory_sheet: openpyxl.Workbook, livestock: str) -> dict:
+def extract_seasonal_data(inventory_sheet: Workbook, livestock: str) -> dict:
     seasonal_sheet = inventory_sheet[f"{livestock}SeasonalData"]
     stock_data = {}
 
@@ -24,8 +22,8 @@ def extract_seasonal_data(inventory_sheet: openpyxl.Workbook, livestock: str) ->
         stock_data[stock_class] = deepcopy(sheep_annual_stock_class_data)
 
         for row in range(3, 34):
-            key = seasonal_sheet.cell(row, 2).value
-            season = seasonal_sheet.cell(row, 1).value
+            key = seasonal_sheet.cell(row, 1).value
+            season = seasonal_sheet.cell(row, 2).value
             value = seasonal_sheet.cell(row, col).value
 
             if key in ["crudeProtein", "dryMatterDigestibility", "feedAvailability"]:
@@ -34,16 +32,16 @@ def extract_seasonal_data(inventory_sheet: openpyxl.Workbook, livestock: str) ->
 
             if season is not None:
                 stock_data[stock_class][season.lower()][key] = value
-            elif key == "head" or key == "purchaseWeight":
+            elif key in ["head", "purchaseWeight", "purchaseSource"]:
                 stock_data[stock_class]["purchases"][0][key] = value
-            else:
+            elif key is not None:
                 stock_data[stock_class][key] = value
 
     return stock_data
 
 
 def extract_annual_data(
-    inventory_sheet: openpyxl.Workbook, json_data: dict, livestock: str
+    inventory_sheet: Workbook, json_data: dict, livestock: str
 ) -> dict:
     if livestock.lower() == "sheep":
         row = 2
@@ -71,7 +69,7 @@ def extract_annual_data(
 
 def extract_lime_data(
     json_data: dict,
-    annual_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    annual_sheet: Worksheet,
     row: int,
     group: int = 0,
 ) -> dict:
@@ -83,7 +81,7 @@ def extract_lime_data(
 
 def extract_fertiliser_data(
     json_data: dict,
-    annual_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    annual_sheet: Worksheet,
     row: int,
     group: int = 0,
 ) -> dict:
@@ -110,7 +108,7 @@ def extract_fertiliser_data(
 
 def extract_fuel_data(
     json_data: dict,
-    annual_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    annual_sheet: Worksheet,
     row: int,
     group: int = 0,
 ) -> dict:
@@ -125,8 +123,8 @@ def extract_fuel_data(
 
 def extract_electricity_data(
     json_data: dict,
-    annual_sheet: openpyxl.worksheet.worksheet.Worksheet,
-    inventory_sheet: openpyxl.Workbook,
+    annual_sheet: Worksheet,
+    inventory_sheet: Workbook,
     row: int,
     group: int = 0,
 ) -> dict:
@@ -146,7 +144,7 @@ def extract_electricity_data(
 
 def extract_supplementation_data(
     json_data: dict,
-    annual_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    annual_sheet: Worksheet,
     row: int,
     group: int = 0,
 ) -> dict:
@@ -155,8 +153,8 @@ def extract_supplementation_data(
         "mineralBlockUrea": annual_sheet.cell(row, 25).value,
         "weanerBlock": annual_sheet.cell(row, 26).value,
         "weanerBlockUrea": annual_sheet.cell(row, 27).value,
-        "dryseasonMix": annual_sheet.cell(row, 28).value,
-        "dryseasonMixUrea": annual_sheet.cell(row, 29).value,
+        "drySeasonMix": annual_sheet.cell(row, 28).value,
+        "drySeasonMixUrea": annual_sheet.cell(row, 29).value,
     }
 
     return json_data
@@ -164,7 +162,7 @@ def extract_supplementation_data(
 
 def extract_feed_data(
     json_data: dict,
-    annual_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    annual_sheet: Worksheet,
     row: int,
     group: int = 0,
 ) -> dict:
@@ -177,7 +175,7 @@ def extract_feed_data(
 
 def extract_chemical_data(
     json_data: dict,
-    annual_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    annual_sheet: Worksheet,
     row: int,
     group: int = 0,
 ) -> dict:
@@ -185,14 +183,14 @@ def extract_chemical_data(
 
     json_data["sheep"][group]["herbicideOther"] = annual_sheet.cell(row, 35).value
 
-    json_data["sheep"][group]["merionoPercent"] = annual_sheet.cell(row, 36).value
+    json_data["sheep"][group]["merinoPercent"] = annual_sheet.cell(row, 36).value
 
     return json_data
 
 
 def extract_merino_pct(
     json_data: dict,
-    annual_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    annual_sheet: Worksheet,
     row: int,
     group: int = 0,
 ) -> dict:
@@ -203,7 +201,7 @@ def extract_merino_pct(
 
 def extract_ewesLambing_rate(
     json_data: dict,
-    annual_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    annual_sheet: Worksheet,
     row: int,
     group: int = 0,
 ) -> dict:
@@ -224,7 +222,7 @@ def extract_ewesLambing_rate(
 
 def extract_seasonalLambing_rate(
     json_data: dict,
-    annual_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    annual_sheet: Worksheet,
     row: int,
     group: int = 0,
 ) -> dict:
@@ -243,9 +241,7 @@ def extract_seasonalLambing_rate(
     return json_data
 
 
-def extract_vegetation_data(
-    json_data: dict, vegetation_sheet: openpyxl.worksheet.worksheet.Worksheet
-) -> dict:
+def extract_vegetation_data(json_data: dict, vegetation_sheet: Worksheet) -> dict:
     json_data["vegetation"] = []
 
     row = 2
@@ -254,8 +250,8 @@ def extract_vegetation_data(
             {
                 "vegetation": {
                     "region": "South West",
-                    "treeSpecies": "No tree data available",
-                    "soil": "No Soil / Tree data available",
+                    "treeSpecies": "Mixed species (Environmental Plantings)",
+                    "soil": "Loams & Clays",
                     "area": 0,
                     "age": 0,
                 },
