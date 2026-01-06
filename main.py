@@ -4,6 +4,7 @@ import os, openpyxl, glob, json, tempfile
 import requests as rq
 from pprint import pprint
 
+
 def main():
     file_path = glob.glob(os.path.join("input", "*.xlsx"))
 
@@ -11,16 +12,20 @@ def main():
 
     seasonal_sheep = extract_inventories_from_excel(inventory_sheet, "sheep")
 
-    json_data = create_json_data(seasonal_sheep, northOfTropicOfCapricorn=False, rainfallAbove600mm=False)
+    json_data = create_json_data(
+        seasonal_sheep, northOfTropicOfCapricorn=False, rainfallAbove600mm=False
+    )
 
     json_data = extract_annual_data(inventory_sheet, json_data, "sheep")
 
     header = {
         "Accept": "application/json",
         "Content-Type": "application/json",
-        "User-Agent": "terrawise"
+        "User-Agent": "terrawise",
     }
-    url = "https://emissionscalculator-mtls.production.aiaapi.com/calculator/2.0.0/sheep"
+    url = (
+        "https://emissionscalculator-mtls.production.aiaapi.com/calculator/sheep"
+    )
 
     # Key and PEM file paths
     key = os.path.join("secret", "carbon-calculator-integration.key")
@@ -31,7 +36,9 @@ def main():
 
     if response.status_code > 299:
         print(f"Error: {response.status_code}")
-        print(response.text)
+        with open(os.path.join("output", "error.json"), "w") as f:
+            f.write(json.dumps(response.json(), indent=4))
+            f.close()
         return
 
     with open(os.path.join("output", "response.json"), "w") as f:
@@ -41,6 +48,7 @@ def main():
     with open(os.path.join("input", "input.json"), "w") as f:
         f.write(json.dumps(json_data, indent=4))
         f.close()
+
 
 if __name__ == "__main__":
     main()
