@@ -1,5 +1,5 @@
-from functions.json_creatation import create_json_data
-from functions.inv_extraction import extract_inventories_from_excel, extract_annual_data
+from internal.stock_class import create_sheep_json_data
+from internal.inv_extraction import extract_inventories_from_excel, extract_annual_data
 import os, openpyxl, glob, json, tempfile
 import requests as rq
 from pprint import pprint
@@ -12,7 +12,7 @@ def main():
 
     seasonal_sheep = extract_inventories_from_excel(inventory_sheet, "sheep")
 
-    json_data = create_json_data(
+    json_data = create_sheep_json_data(
         seasonal_sheep, northOfTropicOfCapricorn=False, rainfallAbove600mm=False
     )
 
@@ -24,7 +24,7 @@ def main():
         "User-Agent": "terrawise",
     }
     url = (
-        "https://emissionscalculator-mtls.production.aiaapi.com/calculator/sheep"
+        "https://emissionscalculator-mtls.production.aiaapi.com/calculator/v3.0.0/sheep"
     )
 
     # Key and PEM file paths
