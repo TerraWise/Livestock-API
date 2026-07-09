@@ -1,81 +1,45 @@
 from copy import deepcopy
 
-from internal.sheep_vars import (
-    sheep_stock_classes,
-    sheep_annual_stock_class_data,
-)
+from internal.sheep_vars import sheep_stock_classes, sheep_annual_stock_class_data
 from internal.beef_vars import beef_stock_classes, beef_annual_stock_class_data
 from internal.inv_extraction import extract_inventories_from_excel, extract_annual_data
 
 # Seasonal list
 seasons = ["autumn", "winter", "spring", "summer"]
 
+# Annual stock class data template per species
+annual_stock_class_data = {
+    "sheep": sheep_annual_stock_class_data,
+    "beef": beef_annual_stock_class_data,
+}
+
 
 class Livestock:
-    def __init__(self, species: str, group: int = 1):
+    def __init__(
+        self,
+        species: str,
+        stock_classes: list[str],
+        groups: int = 1,
+        ids: list[str] | None = None,
+    ):
+        if ids is not None:
+            if groups != len(ids):
+                raise ValueError(
+                    "Number of groups must match the number of IDs provided."
+                )
+
         self.species = species
+        self.stock_classes = stock_classes
 
         # Create stock class data structure
-        self.metadata = {}
-        self.metadata[self.species] = [{"classes": {}}] * group
-
-
-class Sheep(Livestock):
-    def __init__(self, group: int = 1):
-        super().__init__("sheep", group)
-        self.stock_classes = sheep_stock_classes
-
-    def seasonal_data(
-        self,
-        stock_class: str,
-        season: str,
-        head: int,
-        liveweight: float,
-        liveweightGain: float,
-        crudeProtein: float = 0,
-        dryMatterDigestibility: float = 0,
-        feedAvailability: float = 0,
-        index: int = 0,
-    ):
-        target = self.metadata["sheep"][index]["classes"][stock_class][season]
-
-        target.update(
-            {
-                "head": head,
-                "liveweight": liveweight,
-                "liveweightGain": liveweightGain,
-            }
-        )
-
-        for key, value in (
-            ("crudeProtein", crudeProtein),
-            ("dryMatterDigestibility", dryMatterDigestibility),
-            ("feedAvailability", feedAvailability),
-        ):
-            if value > 0:
-                target[key] = value
-
-    def stock_class_data(self, group: int, seasonal_sheep: list):
-        for i in range(group):
-            for stock_class in self.stock_classes:
-                self.metadata["sheep"][i]["classes"][stock_class] = deepcopy(
-                    sheep_annual_stock_class_data
-                )
-                self.metadata["sheep"][i]["classes"][stock_class]["purchases"] = (
-                    seasonal_sheep[i][stock_class]["purchases"]
-                )
-                for season in seasons:
-                    seasonal_sheep_data = seasonal_sheep[i][stock_class][season]
-
-                    self.seasonal_data(
-                        stock_class, season, **seasonal_sheep_data, index=i
-                    )
-
-
-class Beef(Livestock):
-    def __init__(self, group: int = 1, **kwargs):
-        super().__init__("beef", group, **kwargs)
-        self.stock_classes = beef_stock_classes
+        self.metadata = {self.species: []}
+        for g in range(groups):
+            self.metadata[self.species].append(
+                {
+                    "id": ids[g] if ids else "",
+                    "classes": {},
+                }
+            )
 
     def seasonal_data(
         self,
@@ -88,7 +52,7 @@ class Beef(Livestock):
         dryMatterDigestibility: float = 0,
         index: int = 0,
     ):
-        target = self.metadata["beef"][index]["classes"][stock_class][season]
+        target = self.metadata[self.species][index]["classes"][stock_class][season]
 
         target.update(
             {
@@ -108,10 +72,10 @@ class Beef(Livestock):
     def stock_class_data(self, group: int, seasonal_beef: list):
         for i in range(group):
             for stock_class in self.stock_classes:
-                self.metadata["beef"][i]["classes"][stock_class] = deepcopy(
-                    beef_annual_stock_class_data
+                self.metadata[self.species][i]["classes"][stock_class] = deepcopy(
+                    annual_stock_class_data[self.species]
                 )
-                self.metadata["beef"][i]["classes"][stock_class]["purchases"] = (
+                self.metadata[self.species][i]["classes"][stock_class]["purchases"] = (
                     seasonal_beef[i][stock_class]["purchases"]
                 )
                 for season in seasons:
@@ -120,6 +84,18 @@ class Beef(Livestock):
                     self.seasonal_data(
                         stock_class, season, **seasonal_beef_data, index=i
                     )
+
+
+class Sheep(Livestock):
+    def __init__(self, group: int = 1):
+        super().__init__("sheep", sheep_stock_classes, group)
+        self.stock_classes = sheep_stock_classes
+
+
+class Beef(Livestock):
+    def __init__(self, group: int = 1):
+        super().__init__("beef", beef_stock_classes, group)
+        self.stock_classes = beef_stock_classes
 
 
 def create_sheep_json_data(inventory_sheet, group: int = 1) -> dict:
