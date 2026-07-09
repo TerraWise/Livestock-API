@@ -1,4 +1,5 @@
 import os
+import pandas as pd
 import openpyxl
 import glob
 import json
@@ -9,8 +10,6 @@ from internal.json_creation import agro_zone
 from internal.burning import extract_burning_data
 from internal.vegetation import extract_veg_data
 
-from pprint import pprint
-
 
 def main():
     file_path = glob.glob(os.path.join("input", "*.xlsx"))
@@ -18,9 +17,22 @@ def main():
     inventory_sheet = openpyxl.load_workbook(file_path[0], data_only=True)
     state = inventory_sheet["Client detail"].cell(17, 7).value
 
+    sheep_species_ids = []
+    cattle_species_ids = []
+    stock_info = pd.read_excel(file_path[0], "Stock information")
+    for _, r in stock_info.iterrows():
+        if r["Stock category"] == "Sheep":
+            sheep_species_ids.append(r["ID"])
+        elif r["Stock category"] == "Cattle":
+            cattle_species_ids.append(r["ID"])
+
     region_data = agro_zone("_".join(state.lower().split()), False, False)
-    sheep_data = create_sheep_json_data(inventory_sheet, 1)
-    beef_data = create_beef_json_data(inventory_sheet, 1)
+    sheep_data = create_sheep_json_data(
+        inventory_sheet, len(sheep_species_ids), sheep_species_ids
+    )
+    beef_data = create_beef_json_data(
+        inventory_sheet, len(cattle_species_ids), cattle_species_ids
+    )
     burning_data = extract_burning_data(inventory_sheet)
     veg_data = extract_veg_data(inventory_sheet)
 
