@@ -6,7 +6,9 @@ from internal.sheep_vars import sheep_annual_stock_class_data
 from internal.beef_vars import beef_annual_stock_class_data
 
 
-def extract_inventories_from_excel(inventory_sheet: Workbook, livestock: str) -> list:
+def extract_inventories_from_excel(
+    inventory_sheet: Workbook, livestock: str
+) -> list[dict[str, int | float]]:
     seasonal_data = []
 
     seasonal_data.append(extract_seasonal_data(inventory_sheet, livestock))
@@ -20,7 +22,7 @@ def extract_seasonal_data(inventory_sheet: Workbook, livestock: str) -> dict:
 
     for col in range(3, 19):
         stock_class = seasonal_sheet.cell(2, col).value
-        if livestock == livestock:
+        if livestock == "sheep":
             stock_data[stock_class] = deepcopy(sheep_annual_stock_class_data)
         else:
             stock_data[stock_class] = deepcopy(beef_annual_stock_class_data)
@@ -47,7 +49,7 @@ def extract_seasonal_data(inventory_sheet: Workbook, livestock: str) -> dict:
 def extract_annual_data(
     inventory_sheet: Workbook, json_data: dict, livestock: str
 ) -> dict:
-    if livestock.lower() == livestock:
+    if livestock.lower() == "sheep":
         row = 2
     elif livestock.lower() == "cattle":
         row = 3
