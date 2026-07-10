@@ -164,13 +164,10 @@ def extract_annual_data(inventory_sheet: Workbook, livestock: Livestock) -> dict
         json_data = extract_electricity_data(json_data, row, livestock.species, i)
         json_data = extract_feed_data(json_data, row, livestock.species, i)
         json_data = extract_chemical_data(json_data, row, livestock.species, i)
-        json_data = extract_lambing_calving_rate(
-            json_data, annual_sheet, row, livestock
-        )
+        json_data = extract_lambing_calving_rate(json_data, row, livestock.species, i)
         if livestock == "sheep":
-            json_data = extract_merino_pct(json_data, annual_sheet, row, livestock)
             json_data = extract_seasonalLambing_rate(
-                json_data, annual_sheet, row, livestock
+                json_data, row, livestock.species, i
             )
 
     return json_data
@@ -288,60 +285,36 @@ def extract_chemical_data(
     return json_data
 
 
-def extract_merino_pct(
-    json_data: dict,
-    annual_sheet: Worksheet,
-    row: int,
-    livestock: str,
-    group: int = 0,
-) -> dict:
-    json_data[livestock][group]["merinoPercent"] = annual_sheet.cell(row, 37).value
-
-    return json_data
-
-
 def extract_lambing_calving_rate(
     json_data: dict,
     row: tuple,
     livestock: str,
     group: int = 0,
 ) -> dict:
-    season = annual_sheet.cell(row, 38).value
-    rate = annual_sheet.cell(row, 39).value
-
     if livestock == "sheep":
         repro = "ewesLambing"
     else:
         repro = "cowsCalving"
-
-    json_data[livestock][group][repro] = {
-        "autumn": 0,
-        "winter": 0,
-        "spring": 0,
-        "summer": 0,
-    }
-    json_data[livestock][group][repro][season.lower()] = rate  # type: ignore
+    json_data[livestock][group][repro] = {}
+    for i in range(40, 44):
+        season = SEASONS[i % 4]
+        rate = row[i]
+        json_data[livestock][group][repro][season] = rate  # type: ignore
 
     return json_data
 
 
 def extract_seasonalLambing_rate(
     json_data: dict,
-    annual_sheet: Worksheet,
-    row: int,
+    row: tuple,
     livestock: str,
     group: int = 0,
 ) -> dict:
-    json_data[livestock][group]["seasonalLambing"] = {
-        "autumn": 0,
-        "winter": 0,
-        "spring": 0,
-        "summer": 0,
-    }
+    json_data[livestock][group]["seasonalLambing"] = {}
 
-    season = annual_sheet.cell(row, 40).value
-    rate = annual_sheet.cell(row, 41).value
-
-    json_data[livestock][group]["seasonalLambing"][season.lower()] = rate  # type: ignore
+    for i in range(44, 48):
+        season = SEASONS[i % 4]
+        rate = row[i]
+        json_data[livestock][group][repro][season] = rate  # type: ignore
 
     return json_data
