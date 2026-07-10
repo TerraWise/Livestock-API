@@ -159,7 +159,7 @@ def extract_annual_data(inventory_sheet: Workbook, livestock: Livestock) -> dict
         i = livestock.ids.index(row[3]) if row[3] in livestock.ids else 0
         json_data = extract_lime_data(json_data, row, livestock.species, i)
         json_data = extract_fertiliser_data(json_data, row, livestock.species, i)
-        json_data = extract_fuel_data(json_data, annual_sheet, row, livestock)
+        json_data = extract_fuel_data(json_data, row, livestock.species, i)
         json_data = extract_electricity_data(
             json_data, annual_sheet, inventory_sheet, row, livestock
         )
@@ -221,16 +221,15 @@ def extract_fertiliser_data(
 
 def extract_fuel_data(
     json_data: dict,
-    annual_sheet: Worksheet,
-    row: int,
+    row: tuple,
     livestock: str,
     group: int = 0,
 ) -> dict:
-    json_data[livestock][group]["diesel"] = annual_sheet.cell(row, 21).value
+    json_data[livestock][group]["diesel"] = row[23]
 
-    json_data[livestock][group]["petrol"] = annual_sheet.cell(row, 22).value
+    json_data[livestock][group]["petrol"] = row[24]
 
-    json_data[livestock][group]["lpg"] = annual_sheet.cell(row, 23).value
+    json_data[livestock][group]["lpg"] = row[25]
 
     return json_data
 
