@@ -160,11 +160,9 @@ def extract_annual_data(inventory_sheet: Workbook, livestock: Livestock) -> dict
         json_data = extract_lime_data(json_data, row, livestock.species, i)
         json_data = extract_fertiliser_data(json_data, row, livestock.species, i)
         json_data = extract_fuel_data(json_data, row, livestock.species, i)
+        json_data = extract_supplementation_data(json_data, row, livestock.species, i)
         json_data = extract_electricity_data(
             json_data, annual_sheet, inventory_sheet, row, livestock
-        )
-        json_data = extract_supplementation_data(
-            json_data, annual_sheet, row, livestock
         )
         json_data = extract_feed_data(json_data, annual_sheet, row, livestock)
         json_data = extract_chemical_data(json_data, annual_sheet, row, livestock)
@@ -234,6 +232,24 @@ def extract_fuel_data(
     return json_data
 
 
+def extract_supplementation_data(
+    json_data: dict,
+    row: tuple,
+    livestock: str,
+    group: int = 0,
+) -> dict:
+    json_data[livestock][group]["mineralSupplementation"] = {
+        "mineralBlock": row[26],
+        "mineralBlockUrea": row[27],
+        "weanerBlock": row[28],
+        "weanerBlockUrea": row[29],
+        "drySeasonMix": row[30],
+        "drySeasonMixUrea": row[31],
+    }
+
+    return json_data
+
+
 def extract_electricity_data(
     json_data: dict,
     annual_sheet: Worksheet,
@@ -252,25 +268,6 @@ def extract_electricity_data(
         ).value
 
     json_data[livestock][group]["electricityUse"] = annual_sheet.cell(row, 31).value
-
-    return json_data
-
-
-def extract_supplementation_data(
-    json_data: dict,
-    annual_sheet: Worksheet,
-    row: int,
-    livestock: str,
-    group: int = 0,
-) -> dict:
-    json_data[livestock][group]["mineralSupplementation"] = {
-        "mineralBlock": annual_sheet.cell(row, 24).value,
-        "mineralBlockUrea": annual_sheet.cell(row, 25).value,
-        "weanerBlock": annual_sheet.cell(row, 26).value,
-        "weanerBlockUrea": annual_sheet.cell(row, 27).value,
-        "drySeasonMix": annual_sheet.cell(row, 28).value,
-        "drySeasonMixUrea": annual_sheet.cell(row, 29).value,
-    }
 
     return json_data
 
