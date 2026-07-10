@@ -31,5 +31,5 @@ beef_annual_stock_class_data = {
     "summer": deepcopy(beef_seasonal_stock_class_data),
     "headSold": 0,
     "saleWeight": 0,
-    "purchases": [{"head": 0, "purchaseSource": "", "purchaseWeight": 0}],
+    "purchases": [{"head": 0, "purchaseSource": "Dairy origin", "purchaseWeight": 0}],
 }
