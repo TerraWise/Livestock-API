@@ -163,7 +163,7 @@ def extract_annual_data(inventory_sheet: Workbook, livestock: Livestock) -> dict
         json_data = extract_supplementation_data(json_data, row, livestock.species, i)
         json_data = extract_electricity_data(json_data, row, livestock.species, i)
         json_data = extract_feed_data(json_data, row, livestock.species, i)
-        json_data = extract_chemical_data(json_data, annual_sheet, row, livestock)
+        json_data = extract_chemical_data(json_data, row, livestock.species, i)
         json_data = extract_lambing_calving_rate(
             json_data, annual_sheet, row, livestock
         )
@@ -278,13 +278,12 @@ def extract_feed_data(
 
 def extract_chemical_data(
     json_data: dict,
-    annual_sheet: Worksheet,
-    row: int,
+    row: tuple,
     livestock: str,
     group: int = 0,
 ) -> dict:
-    json_data[livestock][group]["herbicide"] = annual_sheet.cell(row, 35).value
-    json_data[livestock][group]["herbicideOther"] = annual_sheet.cell(row, 36).value
+    json_data[livestock][group]["herbicide"] = row[38]
+    json_data[livestock][group]["herbicideOther"] = row[39]
 
     return json_data
 
@@ -303,8 +302,7 @@ def extract_merino_pct(
 
 def extract_lambing_calving_rate(
     json_data: dict,
-    annual_sheet: Worksheet,
-    row: int,
+    row: tuple,
     livestock: str,
     group: int = 0,
 ) -> dict:
