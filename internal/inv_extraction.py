@@ -161,9 +161,7 @@ def extract_annual_data(inventory_sheet: Workbook, livestock: Livestock) -> dict
         json_data = extract_fertiliser_data(json_data, row, livestock.species, i)
         json_data = extract_fuel_data(json_data, row, livestock.species, i)
         json_data = extract_supplementation_data(json_data, row, livestock.species, i)
-        json_data = extract_electricity_data(
-            json_data, annual_sheet, inventory_sheet, row, livestock
-        )
+        json_data = extract_electricity_data(json_data, row, livestock.species, i)
         json_data = extract_feed_data(json_data, annual_sheet, row, livestock)
         json_data = extract_chemical_data(json_data, annual_sheet, row, livestock)
         json_data = extract_lambing_calving_rate(
@@ -252,22 +250,14 @@ def extract_supplementation_data(
 
 def extract_electricity_data(
     json_data: dict,
-    annual_sheet: Worksheet,
-    inventory_sheet: Workbook,
-    row: int,
+    row: tuple,
     livestock: str,
     group: int = 0,
 ) -> dict:
-    json_data[livestock][group]["electricitySource"] = (
-        inventory_sheet["👤Client detail"].cell(54, 7).value
-    )
-
-    if json_data[livestock][group]["electricitySource"] != "Renewable":
-        json_data[livestock][group]["electricityRenewable"] = annual_sheet.cell(
-            row, 30
-        ).value
-
-    json_data[livestock][group]["electricityUse"] = annual_sheet.cell(row, 31).value
+    json_data[livestock][group]["electricitySource"] = row[32]
+    if row[32] != "Renewable":
+        json_data[livestock][group]["electricityRenewable"] = row[33]
+    json_data[livestock][group]["electricityUse"] = row[34]
 
     return json_data
 
