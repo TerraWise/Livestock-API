@@ -15,7 +15,7 @@ def main():
     file_path = glob.glob(os.path.join("input", "*.xlsx"))
 
     inventory_sheet = openpyxl.load_workbook(file_path[0], data_only=True)
-    state = inventory_sheet["Client detail"].cell(17, 7).value
+    state = inventory_sheet["👤Client detail"].cell(17, 7).value
 
     sheep_species_ids = []
     cattle_species_ids = []
@@ -26,7 +26,7 @@ def main():
         elif r["Stock category"] == "Cattle":
             cattle_species_ids.append(r["ID"])
 
-    region_data = agro_zone("_".join(state.lower().split()), False, False)
+    region_data = agro_zone(state, False, False)
     sheep_data = create_sheep_json_data(
         inventory_sheet, len(sheep_species_ids), sheep_species_ids
     )
