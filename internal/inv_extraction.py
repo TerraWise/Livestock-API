@@ -5,43 +5,53 @@ from openpyxl import Workbook
 from internal.sheep_vars import sheep_annual_stock_class_data
 from internal.beef_vars import beef_annual_stock_class_data
 
+SEASONS = ["autumn", "winter", "spring", "summer"]
 
-def extract_inventories_from_excel(
-    inventory_sheet: Workbook, livestock: str
-) -> list[dict[str, int | float]]:
-    seasonal_data = []
+OPTIONAL_SEASON_FIELDS = (
+    (12, "crudeProtein"),
+    (16, "dryMatterDigestibility"),
+    (20, "feedAvailability"),
+)
 
-    seasonal_data.append(extract_seasonal_data(inventory_sheet, livestock))
+
+def extract_seasonal_data(inventory_sheet: Workbook) -> dict:
+    seasonal_data = {}
+    seasonal_sheet = inventory_sheet["Seasonal Data"]
+
+    row_num = 2
+    for row in seasonal_sheet.iter_rows(
+        min_row=2, min_col=1, max_row=34, values_only=True
+    ):
+        stock, stock_id, stock_class = row[0], row[1], row[2]
+        seasonal_data.setdefault(stock, {})
+        seasonal_data[stock].setdefault(stock_id, {})[stock_class] = {}
+        if row[0] is None:
+            break
+        if isinstance(row[0], str):
+            if row[0].startswith("#"):
+                raise ValueError(
+                    f"Invalid data in Seasonal Data sheet at row {row_num}"
+                )
+
+        seasonal_data[stock][stock_id][stock_class] = extract_seasonal_row_data(row)
+        row_num += 1
 
     return seasonal_data
 
 
-def extract_seasonal_data(inventory_sheet: Workbook, livestock: str) -> dict:
-    seasonal_sheet = inventory_sheet[f"{livestock}SeasonalData"]
+def extract_seasonal_row_data(row: tuple) -> dict:
     stock_data = {}
 
-    for col in range(3, 19):
-        stock_class = seasonal_sheet.cell(2, col).value
-        if livestock == "sheep":
-            stock_data[stock_class] = deepcopy(sheep_annual_stock_class_data)
-        else:
-            stock_data[stock_class] = deepcopy(beef_annual_stock_class_data)
-
-        for row in range(3, 34):
-            key = seasonal_sheet.cell(row, 1).value
-            season = seasonal_sheet.cell(row, 2).value
-            value = seasonal_sheet.cell(row, col).value
-
-            if key in ["crudeProtein", "dryMatterDigestibility", "feedAvailability"]:
-                if value == 0:
-                    continue
-
-            if season is not None:
-                stock_data[stock_class][season.lower()][key] = value
-            elif key in ["head", "purchaseWeight", "purchaseSource"]:
-                stock_data[stock_class]["purchases"][0][key] = value
-            elif key is not None:
-                stock_data[stock_class][key] = value
+    for i in range(4, 8):
+        season = SEASONS[i % 4]
+        stock_data[season] = {
+            "head": row[i],
+            "liveweight": row[i + 4],
+            "liveweightGain": row[i + 8],
+        }
+        for offset, key in OPTIONAL_SEASON_FIELDS:
+            if row[i + offset] is not None:
+                stock_data[season][key] = row[i + offset]
 
     return stock_data
 
@@ -143,7 +153,7 @@ def extract_electricity_data(
     group: int = 0,
 ) -> dict:
     json_data[livestock][group]["electricitySource"] = (
-        inventory_sheet["Client detail"].cell(54, 7).value
+        inventory_sheet["👤Client detail"].cell(54, 7).value
     )
 
     if json_data[livestock][group]["electricitySource"] != "Renewable":
