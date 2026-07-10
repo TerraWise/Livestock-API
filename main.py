@@ -66,6 +66,7 @@ def main():
             "statusCode": response.status_code,
             "url": url,
             "response": response_body,
+            "requestPayload": json_data,
         }
         with open(os.path.join("log", "error.json"), "w") as f:
             json.dump(error_log, f, indent=4)
