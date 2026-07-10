@@ -1,6 +1,7 @@
-from copy import deepcopy
 from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl import Workbook
+import glob, os
+import pandas as pd
 
 from internal.sheep_vars import sheep_annual_stock_class_data
 from internal.beef_vars import beef_annual_stock_class_data
@@ -12,6 +13,16 @@ OPTIONAL_SEASON_FIELDS = (
     (16, "dryMatterDigestibility"),
     (20, "feedAvailability"),
 )
+
+STOCK_CLASS_ANNUAL_DATA = [
+    "headShorn",
+    "woolShorn",
+    "cleanWoolYield",
+    "headSold",
+    "saleWeight",
+    "head",
+    "purchaseWeight",
+]
 
 
 def extract_seasonal_data(inventory_sheet: Workbook) -> dict:
@@ -34,6 +45,14 @@ def extract_seasonal_data(inventory_sheet: Workbook) -> dict:
                 )
 
         seasonal_data[stock][stock_id][stock_class] = extract_seasonal_row_data(row)
+        if stock == "sheep":
+            seasonal_data[stock][stock_id][stock_class].update(
+                extract_wool_row_data(row)
+            )
+
+        seasonal_data[stock][stock_id][stock_class].update(
+            extract_transaction_data(stock, stock_id, stock_class)
+        )
         row_num += 1
 
     return seasonal_data
@@ -54,6 +73,59 @@ def extract_seasonal_row_data(row: tuple) -> dict:
                 stock_data[season][key] = row[i + offset]
 
     return stock_data
+
+
+def extract_wool_row_data(row: tuple) -> dict:
+    return {
+        "headShorn": row[28],
+        "woolShorn": row[29],
+        "cleanWoolYield": row[30],
+    }
+
+
+def extract_transaction_data(stock, stock_id, stock_class: str) -> dict:
+    path = glob.glob(os.path.join("input", "*.xlsx"))
+    transaction_df = pd.read_excel(path[0], "Transaction")
+
+    stock_group = stock + " " + stock_id
+    filtered_df = transaction_df.loc[
+        (transaction_df["Stock group"] == stock_group)
+        & (transaction_df["Stock class"] == stock_class)
+    ]
+    if filtered_df.empty:
+        raise ValueError(
+            f"No transaction data found for stock group '{stock_group}' and stock class '{stock_class}'"
+        )
+
+    head_sold = filtered_df["Head"].sum()
+    sale_weight = (
+        sum(filtered_df["Average liveweight (kg)"] * filtered_df["Head"]) / head_sold
+    )
+    transaction_data = {
+        "headSold": head_sold,
+        "saleWeight": sale_weight,
+        "purchases": [],
+    }
+
+    purchases_df = filtered_df.loc[filtered_df["Transaction type"] == "Purchase"]
+    if purchases_df.empty:
+        transaction_data["purchases"].append(build_purchase_entry(stock, 0, 0))
+        return transaction_data
+
+    for _, r in purchases_df.iterrows():
+        source = r["Source"] if stock == "beef" else ""
+        transaction_data["purchases"].append(
+            build_purchase_entry(stock, r["Head"], r["Average liveweight (kg)"], source)
+        )
+
+    return transaction_data
+
+
+def build_purchase_entry(stock, head, weight, source=""):
+    entry = {"head": head, "purchaseWeight": weight}
+    if stock == "beef":
+        entry["purchaseSource"] = source
+    return entry
 
 
 def extract_annual_data(

@@ -42,34 +42,6 @@ class Livestock:
                 }
             )
 
-    def seasonal_data(
-        self,
-        stock_class: str,
-        season: str,
-        head: int,
-        liveweight: float,
-        liveweightGain: float,
-        crudeProtein: float = 0,
-        dryMatterDigestibility: float = 0,
-        index: int = 0,
-    ):
-        target = self.metadata[self.species][index]["classes"][stock_class][season]
-
-        target.update(
-            {
-                "head": head,
-                "liveweight": liveweight,
-                "liveweightGain": liveweightGain,
-            }
-        )
-
-        for key, value in (
-            ("crudeProtein", crudeProtein),
-            ("dryMatterDigestibility", dryMatterDigestibility),
-        ):
-            if value > 0:
-                target[key] = value
-
     def stock_class_data(self, seasonal_data: dict):
         species_data = seasonal_data.get(self.species, {})
         for i, id in enumerate(self.ids):
@@ -80,12 +52,10 @@ class Livestock:
                 )
                 if stock_data is None:
                     continue
-                for season in seasons:
-                    seasonal_stock_data = stock_data[stock_class][season]
 
-                    self.seasonal_data(
-                        stock_class, season, **seasonal_stock_data, index=i
-                    )
+                self.metadata[self.species][i]["classes"][stock_class].update(
+                    stock_data[stock_class]
+                )
 
 
 class Sheep(Livestock):
