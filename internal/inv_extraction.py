@@ -1,3 +1,5 @@
+from typing import TYPE_CHECKING
+
 from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl import Workbook
 import glob, os
@@ -5,7 +7,9 @@ import pandas as pd
 
 from internal.sheep_vars import sheep_annual_stock_class_data
 from internal.beef_vars import beef_annual_stock_class_data
-from internal.stock_class import Livestock
+
+if TYPE_CHECKING:
+    from internal.stock_class import Livestock
 
 SEASONS = ["autumn", "winter", "spring", "summer"]
 
@@ -111,9 +115,11 @@ def extract_transaction_data(stock, stock_id, stock_class: str) -> dict:
         & (transaction_df["Stock class"] == stock_class)
     ]
     if filtered_df.empty:
-        raise ValueError(
-            f"No transaction data found for stock group '{stock_group}' and stock class '{stock_class}'"
-        )
+        return {
+            "headSold": 0,
+            "saleWeight": 0,
+            "purchases": [build_purchase_entry(stock, 0, 0)],
+        }
 
     head_sold = filtered_df["Head"].sum()
     sale_weight = (
@@ -305,12 +311,12 @@ ANNUAL_DATA_EXTRACTORS = (
 )
 
 
-def extract_annual_data(inventory_sheet: Workbook, livestock: Livestock) -> dict:
+def extract_annual_data(inventory_sheet: Workbook, livestock: "Livestock") -> dict:
     annual_sheet = inventory_sheet["Annual Data"]
     json_data = livestock.metadata
 
     for row in annual_sheet.iter_rows(
-        min_row=2, min_col=1, max_col=45, values_only=True
+        min_row=2, min_col=1, max_col=48, values_only=True
     ):
         if row[0] is None:
             break
@@ -319,6 +325,8 @@ def extract_annual_data(inventory_sheet: Workbook, livestock: Livestock) -> dict
         for extractor in ANNUAL_DATA_EXTRACTORS:
             json_data = extractor(json_data, row, livestock.species, i)
         if livestock.species == "sheep":
-            json_data = extract_seasonalLambing_rate(json_data, row, livestock.species, i)
+            json_data = extract_seasonalLambing_rate(
+                json_data, row, livestock.species, i
+            )
 
     return json_data

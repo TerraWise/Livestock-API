@@ -85,6 +85,6 @@ def create_beef_json_data(
     beef = Beef(group, ids)
     seasonal_beef = extract_seasonal_data(inventory_sheet)
     beef.stock_class_data(seasonal_beef)
-    beef.metadata = extract_annual_data(inventory_sheet, beef.metadata, beef.species)
+    beef.metadata = extract_annual_data(inventory_sheet, beef)
 
     return beef.metadata
