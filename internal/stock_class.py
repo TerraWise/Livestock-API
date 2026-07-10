@@ -74,7 +74,7 @@ def create_sheep_json_data(
     sheep = Sheep(group, ids)
     seasonal_sheep = extract_seasonal_data(inventory_sheet)
     sheep.stock_class_data(seasonal_sheep)
-    sheep.metadata = extract_annual_data(inventory_sheet, sheep.metadata, sheep.species)
+    sheep.metadata = extract_annual_data(inventory_sheet, sheep)
 
     return sheep.metadata
 

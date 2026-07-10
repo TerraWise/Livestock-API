@@ -5,6 +5,7 @@ import pandas as pd
 
 from internal.sheep_vars import sheep_annual_stock_class_data
 from internal.beef_vars import beef_annual_stock_class_data
+from internal.stock_class import Livestock
 
 SEASONS = ["autumn", "winter", "spring", "summer"]
 
@@ -22,6 +23,23 @@ STOCK_CLASS_ANNUAL_DATA = [
     "saleWeight",
     "head",
     "purchaseWeight",
+]
+
+OTHER_N_FERTILISERS = [
+    "Monoammonium phosphate (MAP)",
+    "Diammonium phosphate (DAP)",
+    "Urea-Ammonium Nitrate (UAN)",
+    "Ammonium Nitrate (AN)",
+    "Calcium Ammonium Nitrate (CAN)",
+    "Tripple Superphosphate (TSP)",
+    "Super Potash 1:1",
+    "Super Potash 2:1",
+    "Super Potash 3:1",
+    "Super Potash 4:1",
+    "Super Potash 5:1",
+    "Muriate of Potash",
+    "Sulphate of Potash",
+    "Sulphate of Ammonia",
 ]
 
 
@@ -128,72 +146,73 @@ def build_purchase_entry(stock, head, weight, source=""):
     return entry
 
 
-def extract_annual_data(
-    inventory_sheet: Workbook, json_data: dict, livestock: str
-) -> dict:
-    if livestock.lower() == "sheep":
-        row = 2
-    elif livestock.lower() == "cattle":
-        row = 3
-    else:
-        raise ValueError("Unsupported livestock type")
-
+def extract_annual_data(inventory_sheet: Workbook, livestock: Livestock) -> dict:
     annual_sheet = inventory_sheet["Annual Data"]
+    json_data = livestock.metadata
 
-    json_data = extract_lime_data(json_data, annual_sheet, row, livestock)
-    json_data = extract_fertiliser_data(json_data, annual_sheet, row, livestock)
-    json_data = extract_fuel_data(json_data, annual_sheet, row, livestock)
-    json_data = extract_electricity_data(
-        json_data, annual_sheet, inventory_sheet, row, livestock
-    )
-    json_data = extract_supplementation_data(json_data, annual_sheet, row, livestock)
-    json_data = extract_feed_data(json_data, annual_sheet, row, livestock)
-    json_data = extract_chemical_data(json_data, annual_sheet, row, livestock)
-    json_data = extract_lambing_calving_rate(json_data, annual_sheet, row, livestock)
-    if livestock == "sheep":
-        json_data = extract_merino_pct(json_data, annual_sheet, row, livestock)
-        json_data = extract_seasonalLambing_rate(
+    for row in annual_sheet.iter_rows(
+        min_row=2, min_col=1, max_col=45, values_only=True
+    ):
+        if row[0] is None:
+            break
+
+        i = livestock.ids.index(row[3]) if row[3] in livestock.ids else 0
+        json_data = extract_lime_data(json_data, row, livestock.species, i)
+        json_data = extract_fertiliser_data(json_data, row, livestock.species, i)
+        json_data = extract_fuel_data(json_data, annual_sheet, row, livestock)
+        json_data = extract_electricity_data(
+            json_data, annual_sheet, inventory_sheet, row, livestock
+        )
+        json_data = extract_supplementation_data(
             json_data, annual_sheet, row, livestock
         )
+        json_data = extract_feed_data(json_data, annual_sheet, row, livestock)
+        json_data = extract_chemical_data(json_data, annual_sheet, row, livestock)
+        json_data = extract_lambing_calving_rate(
+            json_data, annual_sheet, row, livestock
+        )
+        if livestock == "sheep":
+            json_data = extract_merino_pct(json_data, annual_sheet, row, livestock)
+            json_data = extract_seasonalLambing_rate(
+                json_data, annual_sheet, row, livestock
+            )
 
     return json_data
 
 
 def extract_lime_data(
     json_data: dict,
-    annual_sheet: Worksheet,
-    row: int,
+    row: tuple,
     livestock: str,
     group: int = 0,
 ) -> dict:
-    json_data[livestock][group]["limestone"] = annual_sheet.cell(row, 2).value
-    json_data[livestock][group]["limestoneFraction"] = annual_sheet.cell(row, 3).value
+    json_data[livestock][group]["limestone"] = row[4]
+    json_data[livestock][group]["limestoneFraction"] = row[5]
 
     return json_data
 
 
 def extract_fertiliser_data(
     json_data: dict,
-    annual_sheet: Worksheet,
-    row: int,
+    row: tuple,
     livestock: str,
     group: int = 0,
 ) -> dict:
     json_data[livestock][group]["fertiliser"] = {
-        "singleSuperphosphate": annual_sheet.cell(row, 4).value,
-        "pastureDryland": annual_sheet.cell(row, 5).value,  # Urea
-        "pastureIrrigated": 0,  # Urea
-        "cropsDryland": annual_sheet.cell(row, 6).value,  # Urea
-        "cropsIrrigated": 0,  # Urea
+        "singleSuperphosphate": row[6],
+        "pastureDryland": row[7],  # Urea pasture
+        "pastureIrrigated": 0,
+        "cropsDryland": row[8],  # Urea crop
+        "cropsIrrigated": 0,
         "otherFertilisers": [],
     }
 
-    for col in range(7, 21):
+    for i in range(9, 23):
         json_data[livestock][group]["fertiliser"]["otherFertilisers"].append(
             {
-                "otherType": annual_sheet.cell(1, col).value,
-                "otherDryland": annual_sheet.cell(row, col).value,
+                "otherDryland": row[i],
                 "otherIrrigated": 0,  # Assuming no irrigated data for other fertilisers
+                "otherType": OTHER_N_FERTILISERS[i - 9],
             }
         )
 
