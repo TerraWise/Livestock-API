@@ -55,11 +55,12 @@ def extract_seasonal_data(inventory_sheet: Workbook) -> dict:
     for row in seasonal_sheet.iter_rows(
         min_row=2, min_col=1, max_row=34, values_only=True
     ):
-        stock, stock_id, stock_class = row[0], row[1], row[2]
-        seasonal_data.setdefault(stock, {})
-        seasonal_data[stock].setdefault(stock_id, {})[stock_class] = {}
         if row[0] is None:
             break
+        stock, stock_id, stock_class = row[0], row[1], row[3]
+        stock = stock.lower()
+        seasonal_data.setdefault(stock, {})
+        seasonal_data[stock].setdefault(stock_id, {})[stock_class] = {}
         if isinstance(row[0], str):
             if row[0].startswith("#"):
                 raise ValueError(
@@ -158,8 +159,8 @@ def extract_lime_data(
     livestock: str,
     group: int = 0,
 ) -> dict:
-    json_data[livestock][group]["limestone"] = row[4]
-    json_data[livestock][group]["limestoneFraction"] = row[5]
+    json_data[livestock][group]["limestone"] = row[3]
+    json_data[livestock][group]["limestoneFraction"] = row[4]
 
     return json_data
 
@@ -171,20 +172,20 @@ def extract_fertiliser_data(
     group: int = 0,
 ) -> dict:
     json_data[livestock][group]["fertiliser"] = {
-        "singleSuperphosphate": row[6],
-        "pastureDryland": row[7],  # Urea pasture
+        "singleSuperphosphate": row[5],
+        "pastureDryland": row[6],  # Urea pasture
         "pastureIrrigated": 0,
-        "cropsDryland": row[8],  # Urea crop
+        "cropsDryland": row[7],  # Urea crop
         "cropsIrrigated": 0,
         "otherFertilisers": [],
     }
 
-    for i in range(9, 23):
+    for i in range(8, 22):
         json_data[livestock][group]["fertiliser"]["otherFertilisers"].append(
             {
                 "otherDryland": row[i],
                 "otherIrrigated": 0,  # Assuming no irrigated data for other fertilisers
-                "otherType": OTHER_N_FERTILISERS[i - 9],
+                "otherType": OTHER_N_FERTILISERS[i - 8],
             }
         )
 
@@ -197,11 +198,11 @@ def extract_fuel_data(
     livestock: str,
     group: int = 0,
 ) -> dict:
-    json_data[livestock][group]["diesel"] = row[23]
+    json_data[livestock][group]["diesel"] = row[22]
 
-    json_data[livestock][group]["petrol"] = row[24]
+    json_data[livestock][group]["petrol"] = row[23]
 
-    json_data[livestock][group]["lpg"] = row[25]
+    json_data[livestock][group]["lpg"] = row[24]
 
     return json_data
 
@@ -213,12 +214,12 @@ def extract_supplementation_data(
     group: int = 0,
 ) -> dict:
     json_data[livestock][group]["mineralSupplementation"] = {
-        "mineralBlock": row[26],
-        "mineralBlockUrea": row[27],
-        "weanerBlock": row[28],
-        "weanerBlockUrea": row[29],
-        "drySeasonMix": row[30],
-        "drySeasonMixUrea": row[31],
+        "mineralBlock": row[25],
+        "mineralBlockUrea": row[26],
+        "weanerBlock": row[27],
+        "weanerBlockUrea": row[28],
+        "drySeasonMix": row[29],
+        "drySeasonMixUrea": row[30],
     }
 
     return json_data
@@ -230,10 +231,10 @@ def extract_electricity_data(
     livestock: str,
     group: int = 0,
 ) -> dict:
-    json_data[livestock][group]["electricitySource"] = row[32]
-    if row[32] != "Renewable":
-        json_data[livestock][group]["electricityRenewable"] = row[33]
-    json_data[livestock][group]["electricityUse"] = row[34]
+    json_data[livestock][group]["electricitySource"] = row[31]
+    if row[31] != "Renewable":
+        json_data[livestock][group]["electricityRenewable"] = row[32]
+    json_data[livestock][group]["electricityUse"] = row[33]
 
     return json_data
 
@@ -244,10 +245,10 @@ def extract_feed_data(
     livestock: str,
     group: int = 0,
 ) -> dict:
-    json_data[livestock][group]["grainFeed"] = row[35]
-    json_data[livestock][group]["hayFeed"] = row[36]
+    json_data[livestock][group]["grainFeed"] = row[34]
+    json_data[livestock][group]["hayFeed"] = row[35]
     if livestock == "beef":
-        json_data[livestock][group]["cottonseedFeed"] = row[37]
+        json_data[livestock][group]["cottonseedFeed"] = row[36]
 
     return json_data
 
@@ -258,8 +259,8 @@ def extract_chemical_data(
     livestock: str,
     group: int = 0,
 ) -> dict:
-    json_data[livestock][group]["herbicide"] = row[38]
-    json_data[livestock][group]["herbicideOther"] = row[39]
+    json_data[livestock][group]["herbicide"] = row[37]
+    json_data[livestock][group]["herbicideOther"] = row[38]
 
     return json_data
 
@@ -275,8 +276,8 @@ def extract_lambing_calving_rate(
     else:
         repro = "cowsCalving"
     json_data[livestock][group][repro] = {}
-    for i in range(40, 44):
-        season = SEASONS[i % 4]
+    for i in range(39, 43):
+        season = SEASONS[(i + 1) % 4]
         rate = row[i]
         json_data[livestock][group][repro][season] = rate  # type: ignore
 
@@ -291,8 +292,8 @@ def extract_seasonalLambing_rate(
 ) -> dict:
     json_data[livestock][group]["seasonalLambing"] = {}
 
-    for i in range(44, 48):
-        season = SEASONS[i % 4]
+    for i in range(43, 47):
+        season = SEASONS[(i + 1) % 4]
         rate = row[i]
         json_data[livestock][group]["seasonalLambing"][season] = rate  # type: ignore
 
