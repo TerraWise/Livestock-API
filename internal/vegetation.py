@@ -24,32 +24,16 @@ def vegetation_planting(
 
 
 def extract_veg_data(inventory_sheet: Workbook) -> dict:
-    ws = inventory_sheet["Vegetation"]
+    ws = inventory_sheet["🌿 Vegetation"]
     veg_data = {"vegetation": []}
 
-    row = 2
-    while True:
-        region = ws.cell(row, 2).value
-        tree_species = ws.cell(row, 3).value
-        soil = ws.cell(row, 5).value
-        area = ws.cell(row, 6).value
-        age = ws.cell(row, 8).value
+    for i, row in enumerate(
+        ws.iter_rows(min_row=2, min_col=2, max_col=8, values_only=True)
+    ):
+        region, tree_species, _, soil, area, _, age = row
 
-        if any(
-            list(
-                map(
-                    lambda x: x is None,
-                    [
-                        region,
-                        tree_species,
-                        soil,
-                        area,
-                        age,
-                    ],
-                )
-            )
-        ):
-            if row == 2:
+        if any(value is None for value in (region, tree_species, soil, area, age)):
+            if i == 0:
                 veg_data["vegetation"].append(vegetation_planting())
             break
 
@@ -62,6 +46,5 @@ def extract_veg_data(inventory_sheet: Workbook) -> dict:
                 tree_species=tree_species,
             )
         )
-        row += 1
 
     return veg_data
