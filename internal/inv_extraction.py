@@ -146,33 +146,6 @@ def build_purchase_entry(stock, head, weight, source=""):
     return entry
 
 
-def extract_annual_data(inventory_sheet: Workbook, livestock: Livestock) -> dict:
-    annual_sheet = inventory_sheet["Annual Data"]
-    json_data = livestock.metadata
-
-    for row in annual_sheet.iter_rows(
-        min_row=2, min_col=1, max_col=45, values_only=True
-    ):
-        if row[0] is None:
-            break
-
-        i = livestock.ids.index(row[3]) if row[3] in livestock.ids else 0
-        json_data = extract_lime_data(json_data, row, livestock.species, i)
-        json_data = extract_fertiliser_data(json_data, row, livestock.species, i)
-        json_data = extract_fuel_data(json_data, row, livestock.species, i)
-        json_data = extract_supplementation_data(json_data, row, livestock.species, i)
-        json_data = extract_electricity_data(json_data, row, livestock.species, i)
-        json_data = extract_feed_data(json_data, row, livestock.species, i)
-        json_data = extract_chemical_data(json_data, row, livestock.species, i)
-        json_data = extract_lambing_calving_rate(json_data, row, livestock.species, i)
-        if livestock == "sheep":
-            json_data = extract_seasonalLambing_rate(
-                json_data, row, livestock.species, i
-            )
-
-    return json_data
-
-
 def extract_lime_data(
     json_data: dict,
     row: tuple,
@@ -315,6 +288,37 @@ def extract_seasonalLambing_rate(
     for i in range(44, 48):
         season = SEASONS[i % 4]
         rate = row[i]
-        json_data[livestock][group][repro][season] = rate  # type: ignore
+        json_data[livestock][group]["seasonalLambing"][season] = rate  # type: ignore
+
+    return json_data
+
+
+ANNUAL_DATA_EXTRACTORS = (
+    extract_lime_data,
+    extract_fertiliser_data,
+    extract_fuel_data,
+    extract_supplementation_data,
+    extract_electricity_data,
+    extract_feed_data,
+    extract_chemical_data,
+    extract_lambing_calving_rate,
+)
+
+
+def extract_annual_data(inventory_sheet: Workbook, livestock: Livestock) -> dict:
+    annual_sheet = inventory_sheet["Annual Data"]
+    json_data = livestock.metadata
+
+    for row in annual_sheet.iter_rows(
+        min_row=2, min_col=1, max_col=45, values_only=True
+    ):
+        if row[0] is None:
+            break
+
+        i = livestock.ids.index(row[3]) if row[3] in livestock.ids else 0
+        for extractor in ANNUAL_DATA_EXTRACTORS:
+            json_data = extractor(json_data, row, livestock.species, i)
+        if livestock.species == "sheep":
+            json_data = extract_seasonalLambing_rate(json_data, row, livestock.species, i)
 
     return json_data
