@@ -54,9 +54,21 @@ def main():
 
     if response.status_code > 299:
         print(f"Error: {response.status_code}")
+        response_body = response.json()
+        error_detail = response_body.get("error")
+        if isinstance(error_detail, str):
+            try:
+                response_body["error"] = json.loads(error_detail)
+            except json.JSONDecodeError:
+                pass
+
+        error_log = {
+            "statusCode": response.status_code,
+            "url": url,
+            "response": response_body,
+        }
         with open(os.path.join("log", "error.json"), "w") as f:
-            f.write(json.dumps(response.json(), indent=4))
-            f.close()
+            json.dump(error_log, f, indent=4)
         print("Check log/error.json for more details")
         return
 
