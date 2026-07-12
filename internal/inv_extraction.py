@@ -31,11 +31,11 @@ STOCK_CLASS_ANNUAL_DATA = [
 
 OTHER_N_FERTILISERS = [
     "Monoammonium phosphate (MAP)",
-    "Diammonium phosphate (DAP)",
+    "Diammonium Phosphate (DAP)",
     "Urea-Ammonium Nitrate (UAN)",
     "Ammonium Nitrate (AN)",
     "Calcium Ammonium Nitrate (CAN)",
-    "Tripple Superphosphate (TSP)",
+    "Triple Superphosphate (TSP)",
     "Super Potash 1:1",
     "Super Potash 2:1",
     "Super Potash 3:1",
@@ -102,7 +102,7 @@ def extract_wool_row_data(row: tuple) -> dict:
     return {
         "headShorn": row[28],
         "woolShorn": row[29],
-        "cleanWoolYield": row[30],
+        "cleanWoolYield": row[30] if row[30] is not None else 0,
     }
 
 
