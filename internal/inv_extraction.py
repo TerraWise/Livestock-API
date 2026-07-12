@@ -300,6 +300,32 @@ def extract_seasonalLambing_rate(
     return json_data
 
 
+def extract_merino_pct(
+    json_data: dict,
+    livestock: str,
+    group: int = 0,
+) -> dict:
+    path = glob.glob(os.path.join("input", "*.xlsx"))
+    transaction_df = pd.read_excel(path[0], "Transaction")
+
+    stock_group = livestock + " " + json_data[livestock][group]["id"]
+    filtered_df = transaction_df.loc[
+        (transaction_df["Stock group"] == stock_group)
+        & (transaction_df["Transaction type"] == "Purchase")
+    ]
+
+    if filtered_df.empty:
+        json_data[livestock][group]["merinoPercent"] = 0
+        return json_data
+
+    merino_pct = (
+        filtered_df["Merino sheep purchased (head)"].sum() / filtered_df["Head"].sum()
+    )
+    json_data[livestock][group]["merinoPercent"] = merino_pct
+
+    return json_data
+
+
 ANNUAL_DATA_EXTRACTORS = (
     extract_lime_data,
     extract_fertiliser_data,
@@ -329,5 +355,6 @@ def extract_annual_data(inventory_sheet: Workbook, livestock: "Livestock") -> di
             json_data = extract_seasonalLambing_rate(
                 json_data, row, livestock.species, i
             )
+            json_data = extract_merino_pct(json_data, livestock.species, i)
 
     return json_data
