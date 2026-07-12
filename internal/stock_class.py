@@ -44,7 +44,6 @@ class Livestock:
 
     def stock_class_data(self, seasonal_data: dict):
         species_data = seasonal_data.get(self.species, {})
-        print(species_data)
         for i, id in enumerate(self.ids):
             stock_data = species_data.get(id)
             for stock_class in self.stock_classes:
