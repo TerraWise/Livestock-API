@@ -25,14 +25,10 @@ def extract_burning_data(inventory_sheet: Workbook) -> dict:
     ws = inventory_sheet["🔥Burning"]
     burning_data = {"burning": []}
 
-    for i, row in enumerate(
-        ws.iter_rows(min_row=2, min_col=1, max_col=7, values_only=True)
-    ):
+    for row in ws.iter_rows(min_row=2, min_col=1, max_col=7, values_only=True):
         fuel, season, patchiness, rainfall_zone, years_since_last_fire, fire_scar_area, vegetation = row
 
         if any(value is None for value in row):
-            if i == 0:
-                burning_data["burning"].append(burning_record())
             break
 
         burning_data["burning"].append(
