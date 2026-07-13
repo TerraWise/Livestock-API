@@ -1,115 +1,193 @@
-from copy import deepcopy
+from typing import TYPE_CHECKING
+
 from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl import Workbook
+import glob, os
+import pandas as pd
 
 from internal.sheep_vars import sheep_annual_stock_class_data
 from internal.beef_vars import beef_annual_stock_class_data
 
+if TYPE_CHECKING:
+    from internal.stock_class import Livestock
 
-def extract_inventories_from_excel(inventory_sheet: Workbook, livestock: str) -> list:
-    seasonal_data = []
+SEASONS = ["autumn", "winter", "spring", "summer"]
 
-    seasonal_data.append(extract_seasonal_data(inventory_sheet, livestock))
+OPTIONAL_SEASON_FIELDS = (
+    (12, "crudeProtein"),
+    (16, "dryMatterDigestibility"),
+    (20, "feedAvailability"),
+)
+
+STOCK_CLASS_ANNUAL_DATA = [
+    "headShorn",
+    "woolShorn",
+    "cleanWoolYield",
+    "headSold",
+    "saleWeight",
+    "head",
+    "purchaseWeight",
+]
+
+OTHER_N_FERTILISERS = [
+    "Monoammonium phosphate (MAP)",
+    "Diammonium Phosphate (DAP)",
+    "Urea-Ammonium Nitrate (UAN)",
+    "Ammonium Nitrate (AN)",
+    "Calcium Ammonium Nitrate (CAN)",
+    "Triple Superphosphate (TSP)",
+    "Super Potash 1:1",
+    "Super Potash 2:1",
+    "Super Potash 3:1",
+    "Super Potash 4:1",
+    "Super Potash 5:1",
+    "Muriate of Potash",
+    "Sulphate of Potash",
+    "Sulphate of Ammonia",
+]
+
+
+def extract_seasonal_data(inventory_sheet: Workbook) -> dict:
+    seasonal_data = {}
+    seasonal_sheet = inventory_sheet["Seasonal Data"]
+
+    row_num = 2
+    for row in seasonal_sheet.iter_rows(
+        min_row=2, min_col=1, max_row=34, values_only=True
+    ):
+        if row[0] is None:
+            break
+        stock, stock_id, stock_class = row[0], row[1], row[3]
+        stock = stock.lower()
+        seasonal_data.setdefault(stock, {})
+        seasonal_data[stock].setdefault(stock_id, {})[stock_class] = {}
+        if isinstance(row[0], str):
+            if row[0].startswith("#"):
+                raise ValueError(
+                    f"Invalid data in Seasonal Data sheet at row {row_num}"
+                )
+
+        seasonal_data[stock][stock_id][stock_class] = extract_seasonal_row_data(row)
+        if stock == "sheep":
+            seasonal_data[stock][stock_id][stock_class].update(
+                extract_wool_row_data(row)
+            )
+
+        seasonal_data[stock][stock_id][stock_class].update(
+            extract_transaction_data(stock, stock_id, stock_class)
+        )
+        row_num += 1
 
     return seasonal_data
 
 
-def extract_seasonal_data(inventory_sheet: Workbook, livestock: str) -> dict:
-    seasonal_sheet = inventory_sheet[f"{livestock}SeasonalData"]
+def extract_seasonal_row_data(row: tuple) -> dict:
     stock_data = {}
 
-    for col in range(3, 19):
-        stock_class = seasonal_sheet.cell(2, col).value
-        if livestock == livestock:
-            stock_data[stock_class] = deepcopy(sheep_annual_stock_class_data)
-        else:
-            stock_data[stock_class] = deepcopy(beef_annual_stock_class_data)
-
-        for row in range(3, 34):
-            key = seasonal_sheet.cell(row, 1).value
-            season = seasonal_sheet.cell(row, 2).value
-            value = seasonal_sheet.cell(row, col).value
-
-            if key in ["crudeProtein", "dryMatterDigestibility", "feedAvailability"]:
-                if value == 0:
-                    continue
-
-            if season is not None:
-                stock_data[stock_class][season.lower()][key] = value
-            elif key in ["head", "purchaseWeight", "purchaseSource"]:
-                stock_data[stock_class]["purchases"][0][key] = value
-            elif key is not None:
-                stock_data[stock_class][key] = value
+    for i in range(4, 8):
+        season = SEASONS[i % 4]
+        stock_data[season] = {
+            "head": row[i],
+            "liveweight": row[i + 4],
+            "liveweightGain": row[i + 8],
+        }
+        for offset, key in OPTIONAL_SEASON_FIELDS:
+            if row[i + offset] is not None:
+                stock_data[season][key] = row[i + offset]
 
     return stock_data
 
 
-def extract_annual_data(
-    inventory_sheet: Workbook, json_data: dict, livestock: str
-) -> dict:
-    if livestock.lower() == livestock:
-        row = 2
-    elif livestock.lower() == "cattle":
-        row = 3
-    else:
-        raise ValueError("Unsupported livestock type")
+def extract_wool_row_data(row: tuple) -> dict:
+    return {
+        "headShorn": row[28],
+        "woolShorn": row[29],
+        "cleanWoolYield": row[30] if row[30] is not None else 0,
+    }
 
-    annual_sheet = inventory_sheet["Annual Data"]
 
-    json_data = extract_lime_data(json_data, annual_sheet, row, livestock)
-    json_data = extract_fertiliser_data(json_data, annual_sheet, row, livestock)
-    json_data = extract_fuel_data(json_data, annual_sheet, row, livestock)
-    json_data = extract_electricity_data(
-        json_data, annual_sheet, inventory_sheet, row, livestock
+def extract_transaction_data(stock, stock_id, stock_class: str) -> dict:
+    path = glob.glob(os.path.join("input", "*.xlsx"))
+    transaction_df = pd.read_excel(path[0], "Transaction")
+
+    stock_group = stock + " " + stock_id
+    filtered_df = transaction_df.loc[
+        (transaction_df["Stock group"] == stock_group)
+        & (transaction_df["Stock class"] == stock_class)
+    ]
+    if filtered_df.empty:
+        return {
+            "headSold": 0,
+            "saleWeight": 0,
+            "purchases": [build_purchase_entry(stock, 0, 0)],
+        }
+
+    head_sold = filtered_df["Head"].sum()
+    sale_weight = (
+        sum(filtered_df["Average liveweight (kg)"] * filtered_df["Head"]) / head_sold
+        if head_sold
+        else 0
     )
-    json_data = extract_supplementation_data(json_data, annual_sheet, row, livestock)
-    json_data = extract_feed_data(json_data, annual_sheet, row, livestock)
-    json_data = extract_chemical_data(json_data, annual_sheet, row, livestock)
-    json_data = extract_lambing_calving_rate(json_data, annual_sheet, row, livestock)
-    if livestock == "sheep":
-        json_data = extract_merino_pct(json_data, annual_sheet, row, livestock)
-        json_data = extract_seasonalLambing_rate(
-            json_data, annual_sheet, row, livestock
+    transaction_data = {
+        "headSold": head_sold,
+        "saleWeight": sale_weight,
+        "purchases": [],
+    }
+
+    purchases_df = filtered_df.loc[filtered_df["Transaction type"] == "Purchase"]
+    if purchases_df.empty:
+        transaction_data["purchases"].append(build_purchase_entry(stock, 0, 0))
+        return transaction_data
+
+    for _, r in purchases_df.iterrows():
+        source = r["Source"] if stock == "beef" else ""
+        transaction_data["purchases"].append(
+            build_purchase_entry(stock, r["Head"], r["Average liveweight (kg)"], source)
         )
 
-    return json_data
+    return transaction_data
+
+
+def build_purchase_entry(stock, head, weight, source="Dairy origin"):
+    entry = {"head": head, "purchaseWeight": weight}
+    if stock == "beef":
+        entry["purchaseSource"] = source
+    return entry
 
 
 def extract_lime_data(
     json_data: dict,
-    annual_sheet: Worksheet,
-    row: int,
+    row: tuple,
     livestock: str,
     group: int = 0,
 ) -> dict:
-    json_data[livestock][group]["limestone"] = annual_sheet.cell(row, 2).value
-    json_data[livestock][group]["limestoneFraction"] = annual_sheet.cell(row, 3).value
+    json_data[livestock][group]["limestone"] = row[3]
+    json_data[livestock][group]["limestoneFraction"] = row[4]
 
     return json_data
 
 
 def extract_fertiliser_data(
     json_data: dict,
-    annual_sheet: Worksheet,
-    row: int,
+    row: tuple,
     livestock: str,
     group: int = 0,
 ) -> dict:
     json_data[livestock][group]["fertiliser"] = {
-        "singleSuperphosphate": annual_sheet.cell(row, 4).value,
-        "pastureDryland": annual_sheet.cell(row, 5).value,  # Urea
-        "pastureIrrigated": 0,  # Urea
-        "cropsDryland": annual_sheet.cell(row, 6).value,  # Urea
-        "cropsIrrigated": 0,  # Urea
+        "singleSuperphosphate": row[5],
+        "pastureDryland": row[6],  # Urea pasture
+        "pastureIrrigated": 0,
+        "cropsDryland": row[7],  # Urea crop
+        "cropsIrrigated": 0,
         "otherFertilisers": [],
     }
 
-    for col in range(7, 21):
+    for i in range(8, 22):
         json_data[livestock][group]["fertiliser"]["otherFertilisers"].append(
             {
-                "otherType": annual_sheet.cell(1, col).value,
-                "otherDryland": annual_sheet.cell(row, col).value,
+                "otherDryland": row[i],
                 "otherIrrigated": 0,  # Assuming no irrigated data for other fertilisers
+                "otherType": OTHER_N_FERTILISERS[i - 8],
             }
         )
 
@@ -118,144 +196,177 @@ def extract_fertiliser_data(
 
 def extract_fuel_data(
     json_data: dict,
-    annual_sheet: Worksheet,
-    row: int,
+    row: tuple,
     livestock: str,
     group: int = 0,
 ) -> dict:
-    json_data[livestock][group]["diesel"] = annual_sheet.cell(row, 21).value
+    json_data[livestock][group]["diesel"] = row[22]
 
-    json_data[livestock][group]["petrol"] = annual_sheet.cell(row, 22).value
+    json_data[livestock][group]["petrol"] = row[23]
 
-    json_data[livestock][group]["lpg"] = annual_sheet.cell(row, 23).value
-
-    return json_data
-
-
-def extract_electricity_data(
-    json_data: dict,
-    annual_sheet: Worksheet,
-    inventory_sheet: Workbook,
-    row: int,
-    livestock: str,
-    group: int = 0,
-) -> dict:
-    json_data[livestock][group]["electricitySource"] = (
-        inventory_sheet["Client detail"].cell(54, 7).value
-    )
-
-    if json_data[livestock][group]["electricitySource"] != "Renewable":
-        json_data[livestock][group]["electricityRenewable"] = annual_sheet.cell(
-            row, 30
-        ).value
-
-    json_data[livestock][group]["electricityUse"] = annual_sheet.cell(row, 31).value
+    json_data[livestock][group]["lpg"] = row[24]
 
     return json_data
 
 
 def extract_supplementation_data(
     json_data: dict,
-    annual_sheet: Worksheet,
-    row: int,
+    row: tuple,
     livestock: str,
     group: int = 0,
 ) -> dict:
     json_data[livestock][group]["mineralSupplementation"] = {
-        "mineralBlock": annual_sheet.cell(row, 24).value,
-        "mineralBlockUrea": annual_sheet.cell(row, 25).value,
-        "weanerBlock": annual_sheet.cell(row, 26).value,
-        "weanerBlockUrea": annual_sheet.cell(row, 27).value,
-        "drySeasonMix": annual_sheet.cell(row, 28).value,
-        "drySeasonMixUrea": annual_sheet.cell(row, 29).value,
+        "mineralBlock": row[25],
+        "mineralBlockUrea": row[26],
+        "weanerBlock": row[27],
+        "weanerBlockUrea": row[28],
+        "drySeasonMix": row[29],
+        "drySeasonMixUrea": row[30],
     }
+
+    return json_data
+
+
+def extract_electricity_data(
+    json_data: dict,
+    row: tuple,
+    livestock: str,
+    group: int = 0,
+) -> dict:
+    json_data[livestock][group]["electricitySource"] = row[31]
+    if row[31] != "Renewable":
+        json_data[livestock][group]["electricityRenewable"] = row[32]
+    json_data[livestock][group]["electricityUse"] = row[33]
 
     return json_data
 
 
 def extract_feed_data(
     json_data: dict,
-    annual_sheet: Worksheet,
-    row: int,
+    row: tuple,
     livestock: str,
     group: int = 0,
 ) -> dict:
-    json_data[livestock][group]["grainFeed"] = annual_sheet.cell(row, 32).value
-    json_data[livestock][group]["hayFeed"] = annual_sheet.cell(row, 33).value
+    json_data[livestock][group]["grainFeed"] = row[34]
+    json_data[livestock][group]["hayFeed"] = row[35]
     if livestock == "beef":
-        json_data[livestock][group]["cottonseedFeed"] = annual_sheet.cell(row, 34).value
+        json_data[livestock][group]["cottonseedFeed"] = row[36]
 
     return json_data
 
 
 def extract_chemical_data(
     json_data: dict,
-    annual_sheet: Worksheet,
-    row: int,
+    row: tuple,
     livestock: str,
     group: int = 0,
 ) -> dict:
-    json_data[livestock][group]["herbicide"] = annual_sheet.cell(row, 35).value
-    json_data[livestock][group]["herbicideOther"] = annual_sheet.cell(row, 36).value
-
-    return json_data
-
-
-def extract_merino_pct(
-    json_data: dict,
-    annual_sheet: Worksheet,
-    row: int,
-    livestock: str,
-    group: int = 0,
-) -> dict:
-    json_data[livestock][group]["merinoPercent"] = annual_sheet.cell(row, 37).value
+    json_data[livestock][group]["herbicide"] = row[37]
+    json_data[livestock][group]["herbicideOther"] = row[38]
 
     return json_data
 
 
 def extract_lambing_calving_rate(
     json_data: dict,
-    annual_sheet: Worksheet,
-    row: int,
+    row: tuple,
     livestock: str,
     group: int = 0,
 ) -> dict:
-    season = annual_sheet.cell(row, 38).value
-    rate = annual_sheet.cell(row, 39).value
-
     if livestock == "sheep":
         repro = "ewesLambing"
     else:
         repro = "cowsCalving"
-
-    json_data[livestock][group][repro] = {
-        "autumn": 0,
-        "winter": 0,
-        "spring": 0,
-        "summer": 0,
-    }
-    json_data[livestock][group][repro][season.lower()] = rate  # type: ignore
+    json_data[livestock][group][repro] = {}
+    for i in range(39, 43):
+        season = SEASONS[(i + 1) % 4]
+        rate = row[i]
+        json_data[livestock][group][repro][season] = rate  # type: ignore
 
     return json_data
 
 
 def extract_seasonalLambing_rate(
     json_data: dict,
-    annual_sheet: Worksheet,
-    row: int,
+    row: tuple,
     livestock: str,
     group: int = 0,
 ) -> dict:
-    json_data[livestock][group]["seasonalLambing"] = {
-        "autumn": 0,
-        "winter": 0,
-        "spring": 0,
-        "summer": 0,
-    }
+    json_data[livestock][group]["seasonalLambing"] = {}
 
-    season = annual_sheet.cell(row, 40).value
-    rate = annual_sheet.cell(row, 41).value
+    for i in range(43, 47):
+        season = SEASONS[(i + 1) % 4]
+        rate = row[i]
+        json_data[livestock][group]["seasonalLambing"][season] = rate  # type: ignore
 
-    json_data[livestock][group]["seasonalLambing"][season.lower()] = rate  # type: ignore
+    return json_data
+
+
+def extract_merino_pct(
+    json_data: dict,
+    livestock: str,
+    group: int = 0,
+) -> dict:
+    path = glob.glob(os.path.join("input", "*.xlsx"))
+    transaction_df = pd.read_excel(path[0], "Transaction")
+
+    stock_group = livestock + " " + json_data[livestock][group]["id"]
+    filtered_df = transaction_df.loc[
+        (transaction_df["Stock group"] == stock_group)
+        & (transaction_df["Transaction type"] == "Purchase")
+    ]
+
+    if filtered_df.empty:
+        json_data[livestock][group]["merinoPercent"] = 0
+        return json_data
+
+    total_head = filtered_df["Head"].sum()
+    merino_pct = (
+        filtered_df["Merino sheep purchased (head)"].sum() / total_head
+        if total_head
+        else 0
+    )
+    json_data[livestock][group]["merinoPercent"] = merino_pct
+
+    return json_data
+
+
+ANNUAL_DATA_EXTRACTORS = (
+    extract_lime_data,
+    extract_fertiliser_data,
+    extract_fuel_data,
+    extract_supplementation_data,
+    extract_electricity_data,
+    extract_feed_data,
+    extract_chemical_data,
+    extract_lambing_calving_rate,
+)
+
+
+def extract_annual_data(inventory_sheet: Workbook, livestock: "Livestock") -> dict:
+    annual_sheet = inventory_sheet["Annual Data"]
+    json_data = livestock.metadata
+
+    for row in annual_sheet.iter_rows(
+        min_row=2, min_col=1, max_col=48, values_only=True
+    ):
+        if row[0] is None:
+            break
+
+        i = livestock.ids.index(row[2]) if row[2] in livestock.ids else 0
+        for extractor in ANNUAL_DATA_EXTRACTORS:
+            json_data = extractor(json_data, row, livestock.species, i)
+        if livestock.species == "sheep":
+            json_data = extract_seasonalLambing_rate(
+                json_data, row, livestock.species, i
+            )
+
+    if livestock.species == "sheep":
+        # merinoPercent depends only on the Transaction sheet, not on any
+        # Annual Data row, so it's computed once per group here rather than
+        # inside the row loop above -- otherwise a group with zero matching
+        # Annual Data rows would never get merinoPercent set at all.
+        for i in range(len(json_data[livestock.species])):
+            json_data = extract_merino_pct(json_data, livestock.species, i)
 
     return json_data

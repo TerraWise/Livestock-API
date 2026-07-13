@@ -1,10 +1,16 @@
 def agro_zone(
-    state: str = "wa_sw",
+    state: str | None,
     northOfTropicOfCapricorn: bool = False,
     rainfallAbove600mm: bool = False,
 ) -> dict:
+    if state is None:
+        return {
+            "state": "wa_sw",
+            "northOfTropicOfCapricorn": northOfTropicOfCapricorn,
+            "rainfallAbove600": rainfallAbove600mm,
+        }
     return {
-        "state": state,
+        "state": "_".join(state.lower().split()),
         "northOfTropicOfCapricorn": northOfTropicOfCapricorn,
         "rainfallAbove600": rainfallAbove600mm,
     }

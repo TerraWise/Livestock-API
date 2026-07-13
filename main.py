@@ -1,4 +1,5 @@
 import os
+import pandas as pd
 import openpyxl
 import glob
 import json
@@ -9,22 +10,39 @@ from internal.json_creation import agro_zone
 from internal.burning import extract_burning_data
 from internal.vegetation import extract_veg_data
 
-from pprint import pprint
-
 
 def main():
     file_path = glob.glob(os.path.join("input", "*.xlsx"))
 
     inventory_sheet = openpyxl.load_workbook(file_path[0], data_only=True)
-    state = inventory_sheet["Client detail"].cell(17, 7).value
+    state = inventory_sheet["👤Client detail"].cell(17, 7).value
 
-    region_data = agro_zone("_".join(state.lower().split()), False, False)
-    sheep_data = create_sheep_json_data(inventory_sheet, 1)
-    beef_data = create_beef_json_data(inventory_sheet, 1)
+    sheep_species_ids = []
+    cattle_species_ids = []
+    stock_info = pd.read_excel(file_path[0], "Stock information")
+    for _, r in stock_info.iterrows():
+        if r["Stock category"] == "Sheep":
+            sheep_species_ids.append(r["ID"])
+        elif r["Stock category"] == "Cattle":
+            cattle_species_ids.append(r["ID"])
+
+    region_data = agro_zone(state, False, False)
+    sheep_data = create_sheep_json_data(
+        inventory_sheet, len(sheep_species_ids), sheep_species_ids
+    )
+    beef_data = create_beef_json_data(
+        inventory_sheet, len(cattle_species_ids), cattle_species_ids
+    )
     burning_data = extract_burning_data(inventory_sheet)
     veg_data = extract_veg_data(inventory_sheet)
 
     json_data = region_data | sheep_data | beef_data | burning_data | veg_data
+
+    for directory in ("output", "log"):
+        if not os.path.isdir(directory):
+            continue
+        for file in os.listdir(directory):
+            os.remove(os.path.join(directory, file))
 
     header = {
         "Accept": "application/json",
@@ -42,9 +60,22 @@ def main():
 
     if response.status_code > 299:
         print(f"Error: {response.status_code}")
+        response_body = response.json()
+        error_detail = response_body.get("error")
+        if isinstance(error_detail, str):
+            try:
+                response_body["error"] = json.loads(error_detail)
+            except json.JSONDecodeError:
+                pass
+
+        error_log = {
+            "statusCode": response.status_code,
+            "url": url,
+            "response": response_body,
+            "requestPayload": json_data,
+        }
         with open(os.path.join("log", "error.json"), "w") as f:
-            f.write(json.dumps(response.json(), indent=4))
-            f.close()
+            json.dump(error_log, f, indent=4)
         print("Check log/error.json for more details")
         return
 
