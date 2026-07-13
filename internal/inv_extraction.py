@@ -125,6 +125,8 @@ def extract_transaction_data(stock, stock_id, stock_class: str) -> dict:
     head_sold = filtered_df["Head"].sum()
     sale_weight = (
         sum(filtered_df["Average liveweight (kg)"] * filtered_df["Head"]) / head_sold
+        if head_sold
+        else 0
     )
     transaction_data = {
         "headSold": head_sold,
@@ -146,7 +148,7 @@ def extract_transaction_data(stock, stock_id, stock_class: str) -> dict:
     return transaction_data
 
 
-def build_purchase_entry(stock, head, weight, source=""):
+def build_purchase_entry(stock, head, weight, source="Dairy origin"):
     entry = {"head": head, "purchaseWeight": weight}
     if stock == "beef":
         entry["purchaseSource"] = source
@@ -318,8 +320,11 @@ def extract_merino_pct(
         json_data[livestock][group]["merinoPercent"] = 0
         return json_data
 
+    total_head = filtered_df["Head"].sum()
     merino_pct = (
-        filtered_df["Merino sheep purchased (head)"].sum() / filtered_df["Head"].sum()
+        filtered_df["Merino sheep purchased (head)"].sum() / total_head
+        if total_head
+        else 0
     )
     json_data[livestock][group]["merinoPercent"] = merino_pct
 
@@ -348,13 +353,20 @@ def extract_annual_data(inventory_sheet: Workbook, livestock: "Livestock") -> di
         if row[0] is None:
             break
 
-        i = livestock.ids.index(row[3]) if row[3] in livestock.ids else 0
+        i = livestock.ids.index(row[2]) if row[2] in livestock.ids else 0
         for extractor in ANNUAL_DATA_EXTRACTORS:
             json_data = extractor(json_data, row, livestock.species, i)
         if livestock.species == "sheep":
             json_data = extract_seasonalLambing_rate(
                 json_data, row, livestock.species, i
             )
+
+    if livestock.species == "sheep":
+        # merinoPercent depends only on the Transaction sheet, not on any
+        # Annual Data row, so it's computed once per group here rather than
+        # inside the row loop above -- otherwise a group with zero matching
+        # Annual Data rows would never get merinoPercent set at all.
+        for i in range(len(json_data[livestock.species])):
             json_data = extract_merino_pct(json_data, livestock.species, i)
 
     return json_data
