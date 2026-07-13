@@ -38,6 +38,12 @@ def main():
 
     json_data = region_data | sheep_data | beef_data | burning_data | veg_data
 
+    for directory in ("output", "log"):
+        if not os.path.isdir(directory):
+            continue
+        for file in os.listdir(directory):
+            os.remove(os.path.join(directory, file))
+
     header = {
         "Accept": "application/json",
         "Content-Type": "application/json",
