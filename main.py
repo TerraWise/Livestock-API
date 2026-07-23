@@ -12,7 +12,7 @@ from internal.vegetation import extract_veg_data
 
 
 def main():
-    file_path = glob.glob(os.path.join("input", "*.xlsx"))
+    file_path = glob.glob(os.path.join("input", "*.xlsm"))
 
     inventory_sheet = openpyxl.load_workbook(file_path[0], data_only=True)
     state = inventory_sheet["👤Client detail"].cell(17, 7).value
@@ -21,10 +21,12 @@ def main():
     cattle_species_ids = []
     stock_info = pd.read_excel(file_path[0], "Stock information")
     for _, r in stock_info.iterrows():
-        if r["Stock category"] == "Sheep":
-            sheep_species_ids.append(r["ID"])
-        elif r["Stock category"] == "Cattle":
-            cattle_species_ids.append(r["ID"])
+        stock_id = r["ID"] if pd.notna(r["ID"]) else ""
+        category = str(r["Stock category"]).lower()
+        if category == "sheep":
+            sheep_species_ids.append(stock_id)
+        elif category == "beef":
+            cattle_species_ids.append(stock_id)
 
     region_data = agro_zone(state, False, False)
     sheep_data = create_sheep_json_data(
