@@ -81,11 +81,12 @@ def extract_transaction_data(stock, stock_id, stock_class: str) -> dict:
     path = glob.glob(os.path.join("input", "*.xlsm"))
     transaction_df = pd.read_excel(path[0], "Transaction")
 
-    stock_group = stock + (" " + stock_id if stock_id is not None else "")
+    stock_group = f"{stock} {stock_id}" if stock_id else stock
     filtered_df = transaction_df.loc[
-        (transaction_df["Stock group"] == stock_group)
-        & (transaction_df["Stock class"] == stock_class)
+        transaction_df["Stock group"].str.lower().eq(stock_group)
+        & transaction_df["Code name"].eq(stock_class)
     ]
+
     if filtered_df.empty:
         return {
             "headSold": 0,
@@ -93,9 +94,10 @@ def extract_transaction_data(stock, stock_id, stock_class: str) -> dict:
             "purchases": [build_purchase_entry(stock, 0, 0)],
         }
 
-    head_sold = filtered_df["Head"].sum()
+    head_sold = filtered_df["Quantity"].sum()
     sale_weight = (
-        sum(filtered_df["Average liveweight (kg)"] * filtered_df["Head"]) / head_sold
+        sum(filtered_df["Average liveweight (kg/hd)"] * filtered_df["Quantity"])
+        / head_sold
         if head_sold
         else 0
     )
@@ -113,7 +115,9 @@ def extract_transaction_data(stock, stock_id, stock_class: str) -> dict:
     for _, r in purchases_df.iterrows():
         source = r["Source"] if stock == "beef" else ""
         transaction_data["purchases"].append(
-            build_purchase_entry(stock, r["Head"], r["Average liveweight (kg)"], source)
+            build_purchase_entry(
+                stock, r["Quantity"], r["Average liveweight (kg/hd)"], source
+            )
         )
 
     return transaction_data
@@ -289,15 +293,15 @@ def extract_merino_pct(
         else ""
     )
     filtered_df = transaction_df.loc[
-        (transaction_df["Stock group"] == stock_group)
-        & (transaction_df["Transaction type"] == "Purchase")
+        transaction_df["Stock group"].eq(stock_group)
+        & transaction_df["Transaction type"].eq("Purchase")
     ]
 
     if filtered_df.empty:
         json_data[livestock][group]["merinoPercent"] = 0
         return json_data
 
-    total_head = filtered_df["Head"].sum()
+    total_head = filtered_df["Quantity"].sum()
     merino_pct = (
         filtered_df["Merino sheep purchased (head)"].sum() / total_head
         if total_head

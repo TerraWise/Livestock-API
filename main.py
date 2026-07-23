@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import numpy as np
 import openpyxl
 import glob
 import json
@@ -9,6 +10,15 @@ from internal.stock_class import create_sheep_json_data, create_beef_json_data
 from internal.json_creation import agro_zone
 from internal.burning import extract_burning_data
 from internal.vegetation import extract_veg_data
+
+
+class NumpyEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, np.integer):
+            return int(o)
+        if isinstance(o, np.floating):
+            return float(o)
+        return super().default(o)
 
 
 def main():
@@ -58,7 +68,9 @@ def main():
     pem = os.path.join("secret", "aiaghg-terrawise.pem")
 
     # Send the request
-    response = rq.post(url, headers=header, data=json.dumps(json_data), cert=(pem, key))
+    response = rq.post(
+        url, headers=header, data=json.dumps(json_data, cls=NumpyEncoder), cert=(pem, key)
+    )
 
     if response.status_code > 299:
         print(f"Error: {response.status_code}")
@@ -77,7 +89,7 @@ def main():
             "requestPayload": json_data,
         }
         with open(os.path.join("log", "error.json"), "w") as f:
-            json.dump(error_log, f, indent=4)
+            json.dump(error_log, f, indent=4, cls=NumpyEncoder)
         print("Check log/error.json for more details")
         return
 
@@ -86,7 +98,7 @@ def main():
         f.close()
 
     with open(os.path.join("input", "input.json"), "w") as f:
-        f.write(json.dumps(json_data, indent=4))
+        f.write(json.dumps(json_data, indent=4, cls=NumpyEncoder))
         f.close()
 
 
