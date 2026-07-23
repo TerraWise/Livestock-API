@@ -1,50 +1,19 @@
+from copy import deepcopy
 from typing import TYPE_CHECKING
 
-from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl import Workbook
 import glob, os
 import pandas as pd
 
-from internal.sheep_vars import sheep_annual_stock_class_data
-from internal.beef_vars import beef_annual_stock_class_data
+from internal.constant import (
+    OTHER_N_FERTILISERS,
+    SEASONS,
+    OPTIONAL_SEASON_FIELDS,
+    ANNUAL_DATA_DEFAULTS,
+)
 
 if TYPE_CHECKING:
     from internal.stock_class import Livestock
-
-SEASONS = ["autumn", "winter", "spring", "summer"]
-
-OPTIONAL_SEASON_FIELDS = (
-    (12, "crudeProtein"),
-    (16, "dryMatterDigestibility"),
-    (20, "feedAvailability"),
-)
-
-STOCK_CLASS_ANNUAL_DATA = [
-    "headShorn",
-    "woolShorn",
-    "cleanWoolYield",
-    "headSold",
-    "saleWeight",
-    "head",
-    "purchaseWeight",
-]
-
-OTHER_N_FERTILISERS = [
-    "Monoammonium phosphate (MAP)",
-    "Diammonium Phosphate (DAP)",
-    "Urea-Ammonium Nitrate (UAN)",
-    "Ammonium Nitrate (AN)",
-    "Calcium Ammonium Nitrate (CAN)",
-    "Triple Superphosphate (TSP)",
-    "Super Potash 1:1",
-    "Super Potash 2:1",
-    "Super Potash 3:1",
-    "Super Potash 4:1",
-    "Super Potash 5:1",
-    "Muriate of Potash",
-    "Sulphate of Potash",
-    "Sulphate of Ammonia",
-]
 
 
 def extract_seasonal_data(inventory_sheet: Workbook) -> dict:
@@ -58,6 +27,8 @@ def extract_seasonal_data(inventory_sheet: Workbook) -> dict:
         if row[0] is None:
             break
         stock, stock_id, stock_class = row[0], row[1], row[3]
+        if stock_id is None:
+            stock_id = ""
         stock = stock.lower()
         seasonal_data.setdefault(stock, {})
         seasonal_data[stock].setdefault(stock_id, {})[stock_class] = {}
@@ -107,10 +78,10 @@ def extract_wool_row_data(row: tuple) -> dict:
 
 
 def extract_transaction_data(stock, stock_id, stock_class: str) -> dict:
-    path = glob.glob(os.path.join("input", "*.xlsx"))
+    path = glob.glob(os.path.join("input", "*.xlsm"))
     transaction_df = pd.read_excel(path[0], "Transaction")
 
-    stock_group = stock + " " + stock_id
+    stock_group = stock + (" " + stock_id if stock_id is not None else "")
     filtered_df = transaction_df.loc[
         (transaction_df["Stock group"] == stock_group)
         & (transaction_df["Stock class"] == stock_class)
@@ -233,7 +204,9 @@ def extract_electricity_data(
     livestock: str,
     group: int = 0,
 ) -> dict:
-    json_data[livestock][group]["electricitySource"] = row[31]
+    json_data[livestock][group]["electricitySource"] = (
+        row[31] if row[31] else "State Grid"
+    )
     if row[31] != "Renewable":
         json_data[livestock][group]["electricityRenewable"] = row[32]
     json_data[livestock][group]["electricityUse"] = row[33]
@@ -307,10 +280,14 @@ def extract_merino_pct(
     livestock: str,
     group: int = 0,
 ) -> dict:
-    path = glob.glob(os.path.join("input", "*.xlsx"))
+    path = glob.glob(os.path.join("input", "*.xlsm"))
     transaction_df = pd.read_excel(path[0], "Transaction")
 
-    stock_group = livestock + " " + json_data[livestock][group]["id"]
+    stock_group = livestock + (
+        " " + json_data[livestock][group]["id"]
+        if not pd.isna(json_data[livestock][group]["id"])
+        else ""
+    )
     filtered_df = transaction_df.loc[
         (transaction_df["Stock group"] == stock_group)
         & (transaction_df["Transaction type"] == "Purchase")
@@ -347,11 +324,16 @@ def extract_annual_data(inventory_sheet: Workbook, livestock: "Livestock") -> di
     annual_sheet = inventory_sheet["Annual Data"]
     json_data = livestock.metadata
 
+    for group in json_data[livestock.species]:
+        group.update(deepcopy(ANNUAL_DATA_DEFAULTS[livestock.species]))
+
     for row in annual_sheet.iter_rows(
         min_row=2, min_col=1, max_col=48, values_only=True
     ):
-        if row[0] is None:
+        if row[0] is None or row[0] == 0:
             break
+        if row[0].lower() != livestock.species:
+            continue
 
         i = livestock.ids.index(row[2]) if row[2] in livestock.ids else 0
         for extractor in ANNUAL_DATA_EXTRACTORS:

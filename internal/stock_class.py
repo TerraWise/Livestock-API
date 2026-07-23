@@ -1,17 +1,7 @@
 from copy import deepcopy
 
-from internal.sheep_vars import sheep_stock_classes, sheep_annual_stock_class_data
-from internal.beef_vars import beef_stock_classes, beef_annual_stock_class_data
+from internal.constant import beef_stock_classes, sheep_stock_classes, annual_stock_class_data
 from internal.inv_extraction import extract_seasonal_data, extract_annual_data
-
-# Seasonal list
-seasons = ["autumn", "winter", "spring", "summer"]
-
-# Annual stock class data template per species
-annual_stock_class_data = {
-    "sheep": sheep_annual_stock_class_data,
-    "beef": beef_annual_stock_class_data,
-}
 
 
 class Livestock:
@@ -22,6 +12,11 @@ class Livestock:
         groups: int = 1,
         ids: list[str] | None = None,
     ):
+        if not ids:
+            ids = None
+        if groups < 1:
+            groups = 1
+
         if ids is not None:
             if groups != len(ids):
                 raise ValueError(
