@@ -62,7 +62,7 @@ def seasonal_row(
 
 
 def annual_row(
-    marker=1,
+    stock="sheep",
     id_value="GroupA",
     limestone=200,
     limestone_fraction=0.5,
@@ -87,7 +87,7 @@ def annual_row(
 ):
     """Build a 48-element "Annual Data" row tuple (idx 0-47)."""
     row = [None] * 48
-    row[0] = marker
+    row[0] = stock
     row[2] = id_value
     row[3] = limestone
     row[4] = limestone_fraction
@@ -121,7 +121,7 @@ def burning_row(
     fire_scar_area=10,
     vegetation="Melaleuca woodland",
 ):
-    """Build a 7-element "🔥Burning" row tuple (columns A-G)."""
+    """Build a 7-element "🔥Savannah burning" row tuple (columns A-G)."""
     return (fuel, season, patchiness, rainfall_zone, years_since_last_fire, fire_scar_area, vegetation)
 
 

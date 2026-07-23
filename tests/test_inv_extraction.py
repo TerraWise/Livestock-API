@@ -1,5 +1,4 @@
 from internal.inv_extraction import (
-    OTHER_N_FERTILISERS,
     build_purchase_entry,
     extract_chemical_data,
     extract_electricity_data,
@@ -13,10 +12,9 @@ from internal.inv_extraction import (
     extract_supplementation_data,
     extract_wool_row_data,
 )
+from internal.constant import OTHER_N_FERTILISERS, SEASONS
 
 from tests.conftest import annual_row, seasonal_row
-
-SEASONS = ["autumn", "winter", "spring", "summer"]
 
 # Valid "Purchase source" values, per the data-validation list configured in the
 # real Excel workbook (not enforced anywhere in the Python code itself).

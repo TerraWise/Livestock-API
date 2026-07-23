@@ -1,9 +1,12 @@
 from copy import deepcopy
 
-from internal.beef_vars import beef_annual_stock_class_data, beef_stock_classes
-from internal.sheep_vars import sheep_annual_stock_class_data, sheep_stock_classes
-
-SEASONS = ["autumn", "winter", "spring", "summer"]
+from internal.constant import (
+    beef_annual_stock_class_data,
+    beef_stock_classes,
+    sheep_annual_stock_class_data,
+    sheep_stock_classes,
+    SEASONS,
+)
 
 
 def test_beef_stock_classes_exact_list_and_order():

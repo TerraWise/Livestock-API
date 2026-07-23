@@ -2,8 +2,7 @@ from copy import deepcopy
 
 import pytest
 
-from internal.beef_vars import beef_annual_stock_class_data, beef_stock_classes
-from internal.sheep_vars import sheep_stock_classes
+from internal.constant import beef_annual_stock_class_data, beef_stock_classes, sheep_stock_classes
 from internal.stock_class import Beef, Sheep, create_beef_json_data, create_sheep_json_data
 
 from tests.conftest import annual_row, make_workbook, seasonal_row
@@ -24,6 +23,11 @@ class TestLivestockInit:
                 {"id": "", "classes": {}},
             ]
         }
+
+    def test_zero_groups_with_empty_ids_defaults_to_one_placeholder_group(self, beef_factory):
+        livestock = beef_factory(groups=0, ids=[])
+        assert livestock.ids == [""]
+        assert livestock.metadata == {"beef": [{"id": "", "classes": {}}]}
 
     def test_sheep_wires_correct_species_and_stock_classes(self):
         sheep = Sheep()
@@ -116,7 +120,7 @@ class TestCreateJsonDataEndToEnd:
                 "Seasonal Data": [
                     seasonal_row(stock="beef", stock_id="GroupA", stock_class="cowsGt2", head=(50, 50, 50, 50)),
                 ],
-                "Annual Data": [annual_row(id_value="GroupA", diesel=1000)],
+                "Annual Data": [annual_row(stock="beef", id_value="GroupA", diesel=1000)],
             }
         )
         result = create_beef_json_data(wb, group=1, ids=["GroupA"])
@@ -170,8 +174,8 @@ class TestCreateJsonDataEndToEnd:
         # GroupA has an Annual Data row: gets both row-derived fields and merinoPercent.
         assert "merinoPercent" in result["sheep"][0]
         assert "diesel" in result["sheep"][0]
-        # GroupB has no Annual Data row: still-row-derived fields like diesel
-        # stay absent, but merinoPercent is now computed independently of any
-        # Annual Data row, so it's present (defaulting to 0) for every group.
+        # GroupB has no Annual Data row: row-derived fields like diesel keep
+        # their zeroed default, and merinoPercent is computed independently of
+        # any Annual Data row, so it's present (defaulting to 0) too.
         assert result["sheep"][1]["merinoPercent"] == 0
-        assert "diesel" not in result["sheep"][1]
+        assert result["sheep"][1]["diesel"] == 0

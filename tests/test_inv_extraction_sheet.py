@@ -192,8 +192,8 @@ class TestExtractAnnualData:
         # row's data must land in the group matching its own ID.
         livestock = beef_factory(groups=2, ids=["GroupA", "GroupB"])
         rows = [
-            annual_row(id_value="GroupA", limestone=111),
-            annual_row(id_value="GroupB", limestone=222),
+            annual_row(stock="beef", id_value="GroupA", limestone=111),
+            annual_row(stock="beef", id_value="GroupB", limestone=222),
         ]
         wb = make_workbook({"Annual Data": rows})
         result = extract_annual_data(wb, livestock)
@@ -202,11 +202,13 @@ class TestExtractAnnualData:
 
     def test_unmatched_id_falls_back_to_group_zero(self, beef_factory):
         livestock = beef_factory(groups=2, ids=["GroupA", "GroupB"])
-        rows = [annual_row(id_value="Stray", limestone=999)]
+        rows = [annual_row(stock="beef", id_value="Stray", limestone=999)]
         wb = make_workbook({"Annual Data": rows})
         result = extract_annual_data(wb, livestock)
         assert result["beef"][0]["limestone"] == 999
-        assert "limestone" not in result["beef"][1]
+        # GroupB has no matching Annual Data row, so it keeps the zeroed default
+        # rather than being left without a "limestone" key at all.
+        assert result["beef"][1]["limestone"] == 0
 
     def test_sheep_only_seasonal_lambing_and_merino_percent(
         self, sheep_factory, mock_transaction_glob, transaction_xlsx_factory
@@ -223,7 +225,7 @@ class TestExtractAnnualData:
 
     def test_beef_has_no_seasonal_lambing_or_merino_percent(self, beef_factory):
         livestock = beef_factory(groups=1, ids=["GroupA"])
-        rows = [annual_row(id_value="GroupA")]
+        rows = [annual_row(stock="beef", id_value="GroupA")]
         wb = make_workbook({"Annual Data": rows})
         result = extract_annual_data(wb, livestock)
         assert "seasonalLambing" not in result["beef"][0]
