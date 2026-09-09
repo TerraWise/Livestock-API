@@ -47,6 +47,12 @@ def extract_seasonal_data(inventory_sheet: Workbook) -> dict:
         seasonal_data[stock][stock_id][stock_class].update(
             extract_transaction_data(stock, stock_id, stock_class)
         )
+        seasonal_data[stock][stock_id].update(
+            extract_lambing_calving_rate(f"{stock.capitalize()} {stock_id}")
+        )
+        seasonal_data[stock][stock_id].update(
+            extract_seasonalLambing_rate(f"{stock.capitalize()} {stock_id}")
+        )
         row_num += 1
 
     return seasonal_data
@@ -77,11 +83,11 @@ def extract_wool_row_data(row: tuple) -> dict:
     }
 
 
-def extract_transaction_data(stock, stock_id, stock_class: str) -> dict:
+def extract_transaction_data(stock_cat: str, stock_id: str, stock_class: str) -> dict:
     path = glob.glob(os.path.join("input", "*.xlsm"))
     transaction_df = pd.read_excel(path[0], "Transaction")
 
-    stock_group = f"{stock} {stock_id}" if stock_id else stock
+    stock_group = f"{stock_cat} {stock_id}" if stock_id else stock_cat
     filtered_df = transaction_df.loc[
         transaction_df["Stock group"].str.lower().eq(stock_group)
         & transaction_df["Code name"].eq(stock_class)
@@ -91,7 +97,7 @@ def extract_transaction_data(stock, stock_id, stock_class: str) -> dict:
         return {
             "headSold": 0,
             "saleWeight": 0,
-            "purchases": [build_purchase_entry(stock, 0, 0)],
+            "purchases": [build_purchase_entry(stock_cat, 0, 0)],
         }
 
     head_sold = filtered_df["Quantity"].sum()
@@ -109,18 +115,53 @@ def extract_transaction_data(stock, stock_id, stock_class: str) -> dict:
 
     purchases_df = filtered_df.loc[filtered_df["Transaction type"] == "Purchase"]
     if purchases_df.empty:
-        transaction_data["purchases"].append(build_purchase_entry(stock, 0, 0))
+        transaction_data["purchases"].append(build_purchase_entry(stock_cat, 0, 0))
         return transaction_data
 
     for _, r in purchases_df.iterrows():
-        source = r["Source"] if stock == "beef" else ""
+        source = r["Source"] if stock_cat == "beef" else ""
         transaction_data["purchases"].append(
             build_purchase_entry(
-                stock, r["Quantity"], r["Average liveweight (kg/hd)"], source
+                stock_cat, r["Quantity"], r["Average liveweight (kg/hd)"], source
             )
         )
 
     return transaction_data
+
+
+def extract_lambing_calving_rate(stock_group: str) -> dict:
+    path = glob.glob(os.path.join("input", "*.xlsm"))
+    reproduction_df = pd.read_excel(path[0], "Annual Data - Breed")
+    reproduction_df.set_index(reproduction_df.columns[0], inplace=True)
+    if "sheep" in stock_group.lower():
+        repro = "ewesLambing"
+    else:
+        repro = "cowsCalving"
+
+    reproduction_data = {repro: {}}
+    for s in SEASONS:
+        if stock_group in reproduction_df.index:
+            reproduction_data[repro][s] = reproduction_df.loc[stock_group, f"Lambs/Calfs marking Rate {s.capitalize()}"]
+        else:
+            reproduction_data[repro][s] = 0
+
+    return reproduction_data
+
+
+def extract_seasonalLambing_rate(stock_group: str) -> dict:
+    path = glob.glob(os.path.join("input", "*.xlsm"))
+    reproduction_df = pd.read_excel(path[0], "Annual Data - Breed")
+    reproduction_df.set_index(reproduction_df.columns[0], inplace=True)
+
+    metric = "seasonalLambing"
+    lambing_data = {metric: {}}
+    for s in SEASONS:
+        if stock_group in reproduction_df.index:
+            lambing_data[metric][s] = reproduction_df.loc[stock_group, f"Proportion of ewes lambing/cows calving {s.capitalize()}"]
+        else:
+            lambing_data[metric][s] = 0
+
+    return lambing_data
 
 
 def build_purchase_entry(stock, head, weight, source="Dairy origin"):
@@ -244,41 +285,6 @@ def extract_chemical_data(
     return json_data
 
 
-def extract_lambing_calving_rate(
-    json_data: dict,
-    row: tuple,
-    livestock: str,
-    group: int = 0,
-) -> dict:
-    if livestock == "sheep":
-        repro = "ewesLambing"
-    else:
-        repro = "cowsCalving"
-    json_data[livestock][group][repro] = {}
-    for i in range(39, 43):
-        season = SEASONS[(i + 1) % 4]
-        rate = row[i]
-        json_data[livestock][group][repro][season] = rate  # type: ignore
-
-    return json_data
-
-
-def extract_seasonalLambing_rate(
-    json_data: dict,
-    row: tuple,
-    livestock: str,
-    group: int = 0,
-) -> dict:
-    json_data[livestock][group]["seasonalLambing"] = {}
-
-    for i in range(43, 47):
-        season = SEASONS[(i + 1) % 4]
-        rate = row[i]
-        json_data[livestock][group]["seasonalLambing"][season] = rate  # type: ignore
-
-    return json_data
-
-
 def extract_merino_pct(
     json_data: dict,
     livestock: str,
@@ -342,10 +348,6 @@ def extract_annual_data(inventory_sheet: Workbook, livestock: "Livestock") -> di
         i = livestock.ids.index(stock_cat)
         for extractor in ANNUAL_DATA_EXTRACTORS:
             json_data = extractor(json_data, row, livestock.species, i)
-        if livestock.species == "sheep":
-            json_data = extract_seasonalLambing_rate(
-                json_data, row, livestock.species, i
-            )
 
     if livestock.species == "sheep":
         # merinoPercent depends only on the Transaction sheet, not on any
