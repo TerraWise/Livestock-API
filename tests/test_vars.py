@@ -50,7 +50,9 @@ def test_sheep_stock_classes_exact_list_and_order():
 
 
 def test_beef_purchase_template_defaults_to_dairy_origin():
-    assert beef_annual_stock_class_data["purchases"][0]["purchaseSource"] == "Dairy origin"
+    assert (
+        beef_annual_stock_class_data["purchases"][0]["purchaseSource"] == "Dairy origin"
+    )
 
 
 def test_sheep_purchase_template_has_no_purchase_source_key():
@@ -88,7 +90,9 @@ def test_deepcopy_independence_beef():
     a["autumn"]["head"] = 999
     assert b["purchases"][0]["purchaseSource"] == "Dairy origin"
     assert b["autumn"]["head"] == 0
-    assert beef_annual_stock_class_data["purchases"][0]["purchaseSource"] == "Dairy origin"
+    assert (
+        beef_annual_stock_class_data["purchases"][0]["purchaseSource"] == "Dairy origin"
+    )
     assert beef_annual_stock_class_data["autumn"]["head"] == 0
 
 

@@ -44,15 +44,25 @@ def test_state_normalization(raw, expected):
 @pytest.mark.parametrize("north", [True, False])
 @pytest.mark.parametrize("rainfall", [True, False])
 def test_flag_pass_through_and_key_rename(north, rainfall):
-    result = agro_zone("WA SW", northOfTropicOfCapricorn=north, rainfallAbove600mm=rainfall)
+    result = agro_zone(
+        "WA SW", northOfTropicOfCapricorn=north, rainfallAbove600mm=rainfall
+    )
     assert result["northOfTropicOfCapricorn"] is north
     assert result["rainfallAbove600"] is rainfall
     assert "rainfallAbove600mm" not in result
 
 
 def test_exact_key_set_state_none():
-    assert set(agro_zone(None).keys()) == {"state", "northOfTropicOfCapricorn", "rainfallAbove600"}
+    assert set(agro_zone(None).keys()) == {
+        "state",
+        "northOfTropicOfCapricorn",
+        "rainfallAbove600",
+    }
 
 
 def test_exact_key_set_state_present():
-    assert set(agro_zone("WA SW").keys()) == {"state", "northOfTropicOfCapricorn", "rainfallAbove600"}
+    assert set(agro_zone("WA SW").keys()) == {
+        "state",
+        "northOfTropicOfCapricorn",
+        "rainfallAbove600",
+    }

@@ -67,20 +67,36 @@ class TestExtractSeasonalRowData:
         result = extract_seasonal_row_data(row)
         assert result == {
             "autumn": {
-                "head": 10, "liveweight": 1, "liveweightGain": 0.1,
-                "crudeProtein": 11, "dryMatterDigestibility": 21, "feedAvailability": 31,
+                "head": 10,
+                "liveweight": 1,
+                "liveweightGain": 0.1,
+                "crudeProtein": 11,
+                "dryMatterDigestibility": 21,
+                "feedAvailability": 31,
             },
             "winter": {
-                "head": 20, "liveweight": 2, "liveweightGain": 0.2,
-                "crudeProtein": 12, "dryMatterDigestibility": 22, "feedAvailability": 32,
+                "head": 20,
+                "liveweight": 2,
+                "liveweightGain": 0.2,
+                "crudeProtein": 12,
+                "dryMatterDigestibility": 22,
+                "feedAvailability": 32,
             },
             "spring": {
-                "head": 30, "liveweight": 3, "liveweightGain": 0.3,
-                "crudeProtein": 13, "dryMatterDigestibility": 23, "feedAvailability": 33,
+                "head": 30,
+                "liveweight": 3,
+                "liveweightGain": 0.3,
+                "crudeProtein": 13,
+                "dryMatterDigestibility": 23,
+                "feedAvailability": 33,
             },
             "summer": {
-                "head": 40, "liveweight": 4, "liveweightGain": 0.4,
-                "crudeProtein": 14, "dryMatterDigestibility": 24, "feedAvailability": 34,
+                "head": 40,
+                "liveweight": 4,
+                "liveweightGain": 0.4,
+                "crudeProtein": 14,
+                "dryMatterDigestibility": 24,
+                "feedAvailability": 34,
             },
         }
 
@@ -88,7 +104,11 @@ class TestExtractSeasonalRowData:
         row = seasonal_row(head=(10, 20, 30, 40))
         result = extract_seasonal_row_data(row)
         for season in SEASONS:
-            assert set(result[season].keys()) == {"head", "liveweight", "liveweightGain"}
+            assert set(result[season].keys()) == {
+                "head",
+                "liveweight",
+                "liveweightGain",
+            }
 
     def test_partial_optional_fields_are_independent_per_season(self):
         row = seasonal_row(crude_protein=(5, None, None, None))
@@ -205,7 +225,11 @@ class TestExtractElectricityData:
     # so only those two inputs are exercised here.
     def test_state_grid_includes_renewable_field(self):
         json_data = {"beef": [{}]}
-        row = annual_row(electricity_source="State Grid", electricity_renewable=500, electricity_use=5000)
+        row = annual_row(
+            electricity_source="State Grid",
+            electricity_renewable=500,
+            electricity_use=5000,
+        )
         result = extract_electricity_data(json_data, row, "beef", 0)
         entry = result["beef"][0]
         assert entry["electricitySource"] == "State Grid"
@@ -251,7 +275,10 @@ class TestExtractLambingCalvingRate:
         row = annual_row(repro_rates=(11, 22, 33, 44))
         result = extract_lambing_calving_rate(json_data, row, "sheep", 0)
         assert result["sheep"][0]["ewesLambing"] == {
-            "autumn": 11, "winter": 22, "spring": 33, "summer": 44,
+            "autumn": 11,
+            "winter": 22,
+            "spring": 33,
+            "summer": 44,
         }
         assert "cowsCalving" not in result["sheep"][0]
 
@@ -260,7 +287,10 @@ class TestExtractLambingCalvingRate:
         row = annual_row(repro_rates=(11, 22, 33, 44))
         result = extract_lambing_calving_rate(json_data, row, "beef", 0)
         assert result["beef"][0]["cowsCalving"] == {
-            "autumn": 11, "winter": 22, "spring": 33, "summer": 44,
+            "autumn": 11,
+            "winter": 22,
+            "spring": 33,
+            "summer": 44,
         }
         assert "ewesLambing" not in result["beef"][0]
 
@@ -271,7 +301,10 @@ class TestExtractSeasonalLambingRate:
         row = annual_row(seasonal_lambing=(11, 22, 33, 44))
         result = extract_seasonalLambing_rate(json_data, row, "sheep", 0)
         assert result["sheep"][0]["seasonalLambing"] == {
-            "autumn": 11, "winter": 22, "spring": 33, "summer": 44,
+            "autumn": 11,
+            "winter": 22,
+            "spring": 33,
+            "summer": 44,
         }
 
     def test_has_no_species_gating_of_its_own(self):
@@ -281,5 +314,8 @@ class TestExtractSeasonalLambingRate:
         row = annual_row(seasonal_lambing=(1, 2, 3, 4))
         result = extract_seasonalLambing_rate(json_data, row, "beef", 0)
         assert result["beef"][0]["seasonalLambing"] == {
-            "autumn": 1, "winter": 2, "spring": 3, "summer": 4,
+            "autumn": 1,
+            "winter": 2,
+            "spring": 3,
+            "summer": 4,
         }

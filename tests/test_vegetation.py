@@ -82,7 +82,9 @@ def test_extract_veg_data_later_row_incomplete_stops_without_a_default():
     incomplete = veg_row()[:-1] + (None,)
     wb = make_workbook({"🌿 Vegetation": [complete, incomplete]})
     result = extract_veg_data(wb)
-    assert result == {"vegetation": [vegetation_planting(region="South West", area=52, age=6)]}
+    assert result == {
+        "vegetation": [vegetation_planting(region="South West", area=52, age=6)]
+    }
 
 
 def test_extract_veg_data_truly_empty_sheet_yields_empty_list():

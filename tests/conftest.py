@@ -122,7 +122,15 @@ def burning_row(
     vegetation="Melaleuca woodland",
 ):
     """Build a 7-element "🔥Savannah burning" row tuple (columns A-G)."""
-    return (fuel, season, patchiness, rainfall_zone, years_since_last_fire, fire_scar_area, vegetation)
+    return (
+        fuel,
+        season,
+        patchiness,
+        rainfall_zone,
+        years_since_last_fire,
+        fire_scar_area,
+        vegetation,
+    )
 
 
 def veg_row(
