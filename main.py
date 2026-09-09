@@ -27,11 +27,12 @@ def main():
     inventory_sheet = openpyxl.load_workbook(file_path[0], data_only=True)
     state = inventory_sheet["👤Client detail"].cell(17, 7).value
 
-    sheep_species_ids = []
-    cattle_species_ids = []
-    stock_info = pd.read_excel(file_path[0], "Stock information")
+    sheep_species_ids = ["Sheep for allocation"]
+    cattle_species_ids = ["Cattle for allocation"]
+    stock_info = pd.read_excel(file_path[0], "🐑 Stock information").iloc[:, :3]
+    stock_info = stock_info.loc[stock_info.notna().all(axis=1)]
     for _, r in stock_info.iterrows():
-        stock_id = r["ID"] if pd.notna(r["ID"]) else ""
+        stock_id = r["Breed"] if pd.notna(r["Breed"]) else ""
         category = str(r["Stock category"]).lower()
         if category == "sheep":
             sheep_species_ids.append(stock_id)
@@ -69,7 +70,10 @@ def main():
 
     # Send the request
     response = rq.post(
-        url, headers=header, data=json.dumps(json_data, cls=NumpyEncoder), cert=(pem, key)
+        url,
+        headers=header,
+        data=json.dumps(json_data, cls=NumpyEncoder),
+        cert=(pem, key),
     )
 
     if response.status_code > 299:

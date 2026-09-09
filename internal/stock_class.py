@@ -1,6 +1,10 @@
 from copy import deepcopy
 
-from internal.constant import beef_stock_classes, sheep_stock_classes, annual_stock_class_data
+from internal.constant import (
+    beef_stock_classes,
+    sheep_stock_classes,
+    annual_stock_class_data,
+)
 from internal.inv_extraction import extract_seasonal_data, extract_annual_data
 
 

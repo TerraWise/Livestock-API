@@ -136,8 +136,8 @@ def extract_lime_data(
     livestock: str,
     group: int = 0,
 ) -> dict:
-    json_data[livestock][group]["limestone"] = row[3]
-    json_data[livestock][group]["limestoneFraction"] = row[4]
+    json_data[livestock][group]["limestone"] = row[1]
+    json_data[livestock][group]["limestoneFraction"] = row[2]
 
     return json_data
 
@@ -149,20 +149,20 @@ def extract_fertiliser_data(
     group: int = 0,
 ) -> dict:
     json_data[livestock][group]["fertiliser"] = {
-        "singleSuperphosphate": row[5],
-        "pastureDryland": row[6],  # Urea pasture
+        "singleSuperphosphate": row[3],
+        "pastureDryland": row[4],  # Urea pasture
         "pastureIrrigated": 0,
-        "cropsDryland": row[7],  # Urea crop
+        "cropsDryland": 0,  # Urea crop
         "cropsIrrigated": 0,
         "otherFertilisers": [],
     }
 
-    for i in range(8, 22):
+    for i in range(6, 20):
         json_data[livestock][group]["fertiliser"]["otherFertilisers"].append(
             {
                 "otherDryland": row[i],
                 "otherIrrigated": 0,  # Assuming no irrigated data for other fertilisers
-                "otherType": OTHER_N_FERTILISERS[i - 8],
+                "otherType": OTHER_N_FERTILISERS[i - 6],
             }
         )
 
@@ -175,11 +175,11 @@ def extract_fuel_data(
     livestock: str,
     group: int = 0,
 ) -> dict:
-    json_data[livestock][group]["diesel"] = row[22]
+    json_data[livestock][group]["diesel"] = row[20]
 
-    json_data[livestock][group]["petrol"] = row[23]
+    json_data[livestock][group]["petrol"] = row[21]
 
-    json_data[livestock][group]["lpg"] = row[24]
+    json_data[livestock][group]["lpg"] = row[22]
 
     return json_data
 
@@ -191,12 +191,12 @@ def extract_supplementation_data(
     group: int = 0,
 ) -> dict:
     json_data[livestock][group]["mineralSupplementation"] = {
-        "mineralBlock": row[25],
-        "mineralBlockUrea": row[26],
-        "weanerBlock": row[27],
-        "weanerBlockUrea": row[28],
-        "drySeasonMix": row[29],
-        "drySeasonMixUrea": row[30],
+        "mineralBlock": row[23],
+        "mineralBlockUrea": row[24],
+        "weanerBlock": row[25],
+        "weanerBlockUrea": row[26],
+        "drySeasonMix": row[27],
+        "drySeasonMixUrea": row[28],
     }
 
     return json_data
@@ -209,11 +209,11 @@ def extract_electricity_data(
     group: int = 0,
 ) -> dict:
     json_data[livestock][group]["electricitySource"] = (
-        row[31] if row[31] else "State Grid"
+        row[29] if row[29] else "State Grid"
     )
-    if row[31] != "Renewable":
-        json_data[livestock][group]["electricityRenewable"] = row[32]
-    json_data[livestock][group]["electricityUse"] = row[33]
+    if row[29] != "Renewable":
+        json_data[livestock][group]["electricityRenewable"] = row[30]
+    json_data[livestock][group]["electricityUse"] = row[31]
 
     return json_data
 
@@ -224,10 +224,10 @@ def extract_feed_data(
     livestock: str,
     group: int = 0,
 ) -> dict:
-    json_data[livestock][group]["grainFeed"] = row[34]
-    json_data[livestock][group]["hayFeed"] = row[35]
+    json_data[livestock][group]["grainFeed"] = row[32]
+    json_data[livestock][group]["hayFeed"] = row[33]
     if livestock == "beef":
-        json_data[livestock][group]["cottonseedFeed"] = row[36]
+        json_data[livestock][group]["cottonseedFeed"] = row[34]
 
     return json_data
 
@@ -238,8 +238,8 @@ def extract_chemical_data(
     livestock: str,
     group: int = 0,
 ) -> dict:
-    json_data[livestock][group]["herbicide"] = row[37]
-    json_data[livestock][group]["herbicideOther"] = row[38]
+    json_data[livestock][group]["herbicide"] = row[35]
+    json_data[livestock][group]["herbicideOther"] = row[36]
 
     return json_data
 
@@ -320,12 +320,11 @@ ANNUAL_DATA_EXTRACTORS = (
     extract_electricity_data,
     extract_feed_data,
     extract_chemical_data,
-    extract_lambing_calving_rate,
 )
 
 
 def extract_annual_data(inventory_sheet: Workbook, livestock: "Livestock") -> dict:
-    annual_sheet = inventory_sheet["Annual Data"]
+    annual_sheet = inventory_sheet["Annual Data - Enterprise"]
     json_data = livestock.metadata
 
     for group in json_data[livestock.species]:
@@ -336,10 +335,11 @@ def extract_annual_data(inventory_sheet: Workbook, livestock: "Livestock") -> di
     ):
         if row[0] is None or row[0] == 0:
             break
-        if row[0].lower() != livestock.species:
-            continue
 
-        i = livestock.ids.index(row[2]) if row[2] in livestock.ids else 0
+        stock_cat = row[0]
+        if stock_cat not in livestock.ids:
+            continue
+        i = livestock.ids.index(stock_cat)
         for extractor in ANNUAL_DATA_EXTRACTORS:
             json_data = extractor(json_data, row, livestock.species, i)
         if livestock.species == "sheep":
