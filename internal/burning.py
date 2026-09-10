@@ -37,7 +37,8 @@ def extract_burning_data(inventory_sheet: Workbook) -> dict:
         ) = row
 
         if any(value is None for value in row):
-            break
+            print("Skipping burning data row due to missing value")
+            return burning_data
 
         burning_data["burning"].append(
             burning_record(

@@ -31,19 +31,32 @@ def extract_veg_data(inventory_sheet: Workbook) -> dict:
     ws = inventory_sheet["🌿 Vegetation"]
     veg_data = {"vegetation": []}
 
-    for row in ws.iter_rows(min_row=2, min_col=2, max_col=8, values_only=True):
-        region, tree_species, _, soil, area, _, age = row
+    for row in ws.iter_rows(min_row=2, min_col=2, max_col=10, values_only=True):
+        (
+            region,
+            tree_species,
+            _,
+            soil,
+            area,
+            _,
+            age,
+            beef_proportion,
+            sheep_proportion,
+        ) = row
 
         if any(value is None for value in (region, tree_species, soil, area, age)):
-            break
+            print("Skipping vegetation data row due to missing value")
+            return veg_data
 
         veg_data["vegetation"].append(
             vegetation_planting(
-                age=age,
-                area=area,
-                region=region,
-                soil=soil,
-                tree_species=tree_species,
+                beef_proportion,
+                sheep_proportion,
+                age,
+                area,
+                region,
+                soil,
+                tree_species,
             )
         )
 
