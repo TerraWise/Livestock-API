@@ -1,29 +1,77 @@
-from copy import deepcopy
+OTHER_N_FERTILISERS = {
+    "Monoammonium phosphate (MAP)": "MAP",
+    "Diammonium Phosphate (DAP)": "DAP",
+    "Urea-Ammonium Nitrate (UAN)": "UAN",
+    "Ammonium Nitrate (AN)": "AN",
+    "Calcium Ammonium Nitrate (CAN)": "CAN",
+    "Triple Superphosphate (TSP)": "TSP",
+    "Super Potash 1:1": "Super potash 1:1",
+    "Super Potash 2:1": "Super potash 2:1",
+    "Super Potash 3:1": "Super potash 3:1",
+    "Super Potash 4:1": "Super potash 4:1",
+    "Super Potash 5:1": "Super potash 5:1",
+    "Muriate of Potash": "MOP",
+    "Sulphate of Potash": "SOP",
+    "Sulphate of Ammonia": "SOA",
+}
 
-OTHER_N_FERTILISERS = [
-    "Monoammonium phosphate (MAP)",
-    "Diammonium Phosphate (DAP)",
-    "Urea-Ammonium Nitrate (UAN)",
-    "Ammonium Nitrate (AN)",
-    "Calcium Ammonium Nitrate (CAN)",
-    "Triple Superphosphate (TSP)",
-    "Super Potash 1:1",
-    "Super Potash 2:1",
-    "Super Potash 3:1",
-    "Super Potash 4:1",
-    "Super Potash 5:1",
-    "Muriate of Potash",
-    "Sulphate of Potash",
-    "Sulphate of Ammonia",
-]
 
 SEASONS = ["autumn", "winter", "spring", "summer"]
 
-OPTIONAL_SEASON_FIELDS = (
-    (12, "crudeProtein"),
-    (16, "dryMatterDigestibility"),
-    (20, "feedAvailability"),
-)
+OPTIONAL_SEASON_FIELDS = {
+    "crudeProtein": "Crude protein (%)",
+    "dryMatterDigestibility": "Dry matter digestibility (%)",
+    "feedAvailability": "Feed availability (t/ha)",
+}
+
+ANNUAL_SCALAR_COLUMNS = {
+    "limestone": "Mass of Lime Applied (total tonnes)",
+    "limestoneFraction": "Fraction of Lime/Dolomite",
+    "diesel": "Annual Diesel Consumption (litres/year)",
+    "petrol": "Annual Petrol Use (litres/year)",
+    "lpg": "Annual LPG Use (litres/year)",
+    "herbicide": "Herbicide (Paraquat, Diquat, Glyphosate) (kg a.i.)",
+    "herbicideOther": "General Herbicide/Pesticide use (kg a.i.)",
+}
+
+ANNUAL_NESTED_COLUMNS = {
+    "mineralSupplementation": {
+        "mineralBlock": "Mineral Block (t)",
+        "mineralBlockUrea": "Mineral Block Urea (% Urea)",
+        "weanerBlock": "Weaner Block (t)",
+        "weanerBlockUrea": "Weaner Block Urea (% Urea)",
+        "drySeasonMix": "Dry Season Mix (t)",
+        "drySeasonMixUrea": "Dry Season Mix Urea (% Urea)",
+    },
+}
+
+# Per-stock-class seasonal defaults. liveweight/liveweightGain must stay FLOAT:
+# 0 == 0.0 in Python so the tests cannot tell them apart, but json.dumps emits
+# "0" vs "0.0", so tidying these to int would change the bytes on the wire.
+SEASONAL_STOCK_CLASS_DATA = {"head": 0, "liveweight": 0.0, "liveweightGain": 0.0}
+
+
+def _season_defaults() -> dict:
+    """A fresh {season: defaults} block, one distinct dict per season.
+
+    Separate objects matter: aliasing them would make a write to one season's
+    head land on all four, and deepcopy faithfully reproduces the aliasing, so
+    the deepcopy-independence tests would not catch it.
+    """
+    return {season: dict(SEASONAL_STOCK_CLASS_DATA) for season in SEASONS}
+
+
+def _other_fertiliser_defaults() -> list:
+    """Zeroed entry per OTHER_N_FERTILISERS name, in list order.
+
+    That order is load-bearing: extract_fertiliser_data pairs it positionally
+    with the 14 contiguous sheet columns starting at index 6.
+    """
+    return [
+        {"otherDryland": 0, "otherIrrigated": 0, "otherType": name}
+        for name in OTHER_N_FERTILISERS
+    ]
+
 
 # Beef Stock class list
 beef_stock_classes = [
@@ -45,15 +93,9 @@ beef_stock_classes = [
     "steersLt1Traded",
 ]
 
-# Stock class specific seasonal data
-beef_seasonal_stock_class_data = {"head": 0, "liveweight": 0.0, "liveweightGain": 0.0}
-
 # Stock class specific annual data
 beef_annual_stock_class_data = {
-    "autumn": deepcopy(beef_seasonal_stock_class_data),
-    "winter": deepcopy(beef_seasonal_stock_class_data),
-    "spring": deepcopy(beef_seasonal_stock_class_data),
-    "summer": deepcopy(beef_seasonal_stock_class_data),
+    **_season_defaults(),
     "headSold": 0,
     "saleWeight": 0,
     "purchases": [{"head": 0, "purchaseSource": "Dairy origin", "purchaseWeight": 0}],
@@ -69,10 +111,7 @@ beef_annual_data = {
         "pastureIrrigated": 0,
         "cropsDryland": 0,
         "cropsIrrigated": 0,
-        "otherFertilisers": [
-            {"otherDryland": 0, "otherIrrigated": 0, "otherType": name}
-            for name in OTHER_N_FERTILISERS
-        ],
+        "otherFertilisers": _other_fertiliser_defaults(),
     },
     "diesel": 0,
     "petrol": 0,
@@ -114,15 +153,9 @@ sheep_stock_classes = [
     "wethers",
 ]
 
-# Stock class specific seasonal data
-sheep_seasonal_stock_class_data = {"head": 0, "liveweight": 0.0, "liveweightGain": 0.0}
-
 # Stock class specific annual data
 sheep_annual_stock_class_data = {
-    "autumn": deepcopy(sheep_seasonal_stock_class_data),
-    "winter": deepcopy(sheep_seasonal_stock_class_data),
-    "spring": deepcopy(sheep_seasonal_stock_class_data),
-    "summer": deepcopy(sheep_seasonal_stock_class_data),
+    **_season_defaults(),
     "headShorn": 0,
     "woolShorn": 0,
     "cleanWoolYield": 0,
@@ -141,10 +174,7 @@ sheep_annual_data = {
         "pastureIrrigated": 0,
         "cropsDryland": 0,
         "cropsIrrigated": 0,
-        "otherFertilisers": [
-            {"otherDryland": 0, "otherIrrigated": 0, "otherType": name}
-            for name in OTHER_N_FERTILISERS
-        ],
+        "otherFertilisers": _other_fertiliser_defaults(),
     },
     "diesel": 0,
     "petrol": 0,

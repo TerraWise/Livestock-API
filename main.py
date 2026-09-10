@@ -25,7 +25,7 @@ def main():
     file_path = glob.glob(os.path.join("input", "*.xlsm"))
 
     inventory_sheet = openpyxl.load_workbook(file_path[0], data_only=True)
-    state = inventory_sheet["👤Client detail"].cell(17, 7).value
+    state = inventory_sheet["👤Client detail"].cell(7, 2).value
 
     sheep_species_ids = ["Sheep for allocation"]
     cattle_species_ids = ["Cattle for allocation"]
@@ -40,12 +40,8 @@ def main():
             cattle_species_ids.append(stock_id)
 
     region_data = agro_zone(state, False, False)
-    sheep_data = create_sheep_json_data(
-        inventory_sheet, len(sheep_species_ids), sheep_species_ids
-    )
-    beef_data = create_beef_json_data(
-        inventory_sheet, len(cattle_species_ids), cattle_species_ids
-    )
+    sheep_data = create_sheep_json_data(len(sheep_species_ids), sheep_species_ids)
+    beef_data = create_beef_json_data(len(cattle_species_ids), cattle_species_ids)
     burning_data = extract_burning_data(inventory_sheet)
     veg_data = extract_veg_data(inventory_sheet)
 
@@ -53,6 +49,7 @@ def main():
 
     for directory in ("output", "log"):
         if not os.path.isdir(directory):
+            os.makedirs(directory)
             continue
         for file in os.listdir(directory):
             os.remove(os.path.join(directory, file))

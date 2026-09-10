@@ -1,4 +1,5 @@
 from copy import deepcopy
+from functools import lru_cache
 from typing import TYPE_CHECKING
 
 from openpyxl import Workbook
@@ -10,86 +11,149 @@ from internal.constant import (
     SEASONS,
     OPTIONAL_SEASON_FIELDS,
     ANNUAL_DATA_DEFAULTS,
+    ANNUAL_SCALAR_COLUMNS,
+    ANNUAL_NESTED_COLUMNS,
 )
 
 if TYPE_CHECKING:
     from internal.stock_class import Livestock
 
 
-def extract_seasonal_data(inventory_sheet: Workbook) -> dict:
+def workbook_path() -> str:
+    """Resolve the single input workbook.
+
+    glob.glob is looked up on the module at call time and never bound with
+    `from glob import glob` -- the tests monkeypatch "glob.glob", and that only
+    works through the module attribute. Rebinding it here, caching the result,
+    or taking the path as an argument would make those mocks stop applying
+    silently, and the suite would start reading the real input/ workbook.
+
+    The bare [0] is deliberate: the four call sites this replaces all raised
+    IndexError on an empty input/, and that stays unchanged.
+    """
+    return glob.glob(os.path.join("input", "*.xlsm"))[0]
+
+
+@lru_cache(maxsize=32)
+def _read_sheet(path: str, sheet: str, _fingerprint: tuple) -> pd.DataFrame:
+    """Memoised read. _fingerprint only participates in the cache key."""
+    return pd.read_excel(path, sheet)
+
+
+def read_sheet(sheet: str) -> pd.DataFrame:
+    """Parse one sheet of the input workbook, memoised.
+
+    Keyed on (path, sheet, mtime, size): the path keeps one test's temp
+    workbook from serving the next one's read, and the stat pair catches a
+    workbook rewritten in place. Reads stay per-sheet and lazy -- callers may
+    ask for a sheet the file does not have, so nothing here may parse the
+    workbook eagerly or validate its sheet names up front.
+
+    Returns the SHARED cached frame. Never mutate it; see breed_table.
+    """
+    path = workbook_path()
+    try:
+        stat = os.stat(path)
+        fingerprint = (stat.st_mtime_ns, stat.st_size)
+    except OSError:
+        fingerprint = ()
+    return _read_sheet(path, sheet, fingerprint)
+
+
+def clear_sheet_cache() -> None:
+    """Drop every memoised sheet. Public so tests can reset between cases."""
+    _read_sheet.cache_clear()
+
+
+def transaction_table() -> pd.DataFrame:
+    """The "Transaction" sheet. Read-only."""
+    return read_sheet("Transaction")
+
+
+def breed_table() -> pd.DataFrame:
+    """ "Annual Data - Breed", indexed by its first (stock-group) column.
+
+    set_index is deliberately not inplace. read_sheet hands back the shared
+    cached frame, so re-indexing in place would leave the next caller with a
+    frame whose first column is a rate, silently turning every subsequent
+    lookup into a miss and every rate into 0.
+    """
+    frame = read_sheet("Annual Data - Breed")
+    return frame.set_index(frame.columns[0])
+
+
+def extract_seasonal_data(species: str) -> dict:
     seasonal_data = {}
-    seasonal_sheet = inventory_sheet["Seasonal Data"]
+    seasonal_sheet = read_sheet("Seasonal Data")
 
-    row_num = 2
-    for row in seasonal_sheet.iter_rows(
-        min_row=2, min_col=1, max_row=34, values_only=True
-    ):
-        if row[0] is None:
-            break
-        stock, stock_id, stock_class = row[0], row[1], row[3]
-        if stock_id is None:
-            stock_id = ""
-        stock = stock.lower()
-        seasonal_data.setdefault(stock, {})
-        seasonal_data[stock].setdefault(stock_id, {})[stock_class] = {}
-        if isinstance(row[0], str):
-            if row[0].startswith("#"):
-                raise ValueError(
-                    f"Invalid data in Seasonal Data sheet at row {row_num}"
-                )
+    for i, row in seasonal_sheet.iterrows():
+        if pd.isna(row.loc["Stock category"]):
+            raise ValueError(f"Missing value in seasonal data row: {i+2}")
+        if row.loc["Stock category"].lower() != species:
+            continue
 
-        seasonal_data[stock][stock_id][stock_class] = extract_seasonal_row_data(row)
+        stock, stock_class = (
+            row.loc["Stock category"].lower(),
+            row.loc["Code name"],
+        )
+        stock_id = row.loc["ID"] if not pd.isna(row.loc["ID"]) else ""
+
+        class_data = extract_seasonal_row_data(row)
         if stock == "sheep":
-            seasonal_data[stock][stock_id][stock_class].update(
-                extract_wool_row_data(row)
-            )
+            class_data.update(extract_wool_row_data(row))
+        class_data.update(extract_transaction_data(stock, stock_id, stock_class))
 
-        seasonal_data[stock][stock_id][stock_class].update(
-            extract_transaction_data(stock, stock_id, stock_class)
-        )
-        seasonal_data[stock][stock_id].update(
-            extract_lambing_calving_rate(f"{stock.capitalize()} {stock_id}")
-        )
-        seasonal_data[stock][stock_id].update(
-            extract_seasonalLambing_rate(f"{stock.capitalize()} {stock_id}")
-        )
-        row_num += 1
+        groups = seasonal_data.setdefault(stock, {})
+        groups.setdefault(stock_id, {})[stock_class] = class_data
 
     return seasonal_data
 
 
-def extract_seasonal_row_data(row: tuple) -> dict:
+def extract_seasonal_row_data(r: pd.Series) -> dict:
     stock_data = {}
 
-    for i in range(4, 8):
-        season = SEASONS[i % 4]
-        stock_data[season] = {
-            "head": row[i],
-            "liveweight": row[i + 4],
-            "liveweightGain": row[i + 8],
+    for s in SEASONS:
+        stock_data[s] = {
+            "head": r.loc[f"Stock number (head) - {s.capitalize()}"],
+            "liveweight": r.loc[f"Live weight (kg/head) - {s.capitalize()}"],
+            "liveweightGain": r.loc[f"Live weight gain (kg/day) - {s.capitalize()}"],
         }
-        for offset, key in OPTIONAL_SEASON_FIELDS:
-            if row[i + offset] is not None:
-                stock_data[season][key] = row[i + offset]
+        for key, val in OPTIONAL_SEASON_FIELDS.items():
+            if pd.notna(r.loc[f"{val} - {s.capitalize()}"]):
+                stock_data[s][key] = r.loc[f"{val} - {s.capitalize()}"]
 
     return stock_data
 
 
-def extract_wool_row_data(row: tuple) -> dict:
+def extract_wool_row_data(r: pd.Series) -> dict:
     return {
-        "headShorn": row[28],
-        "woolShorn": row[29],
-        "cleanWoolYield": row[30] if row[30] is not None else 0,
+        "headShorn": r.loc["Head shorn (hd)"],
+        "woolShorn": r.loc["Wool shorn (kg/hd)"],
+        "cleanWoolYield": r.loc["Clean wool yield (%)"],
     }
 
 
-def extract_transaction_data(stock_cat: str, stock_id: str, stock_class: str) -> dict:
-    path = glob.glob(os.path.join("input", "*.xlsm"))
-    transaction_df = pd.read_excel(path[0], "Transaction")
+def safe_ratio(numerator, denominator):
+    """Divide, treating a zero denominator as 0 rather than NaN.
 
+    Both Transaction aggregations can match rows whose quantities sum to zero.
+    Pandas would give NaN there, which serialises to a JSON null the API
+    rejects, so every such division goes through here.
+    """
+    return numerator / denominator if denominator else 0
+
+
+def extract_transaction_data(stock_cat: str, stock_id: str, stock_class: str) -> dict:
+    transaction_df = transaction_table()
+
+    # NOTE: only the Stock group column is case-folded, not the key built here,
+    # so this never matches an id containing an uppercase letter.
+    # extract_merino_pct builds the same key a third way. Left as-is
+    # deliberately: reconciling them changes behaviour, which is not this
+    # change's job.
     stock_group = f"{stock_cat} {stock_id}" if stock_id else stock_cat
     filtered_df = transaction_df.loc[
-        transaction_df["Stock group"].str.lower().eq(stock_group)
+        transaction_df["Stock group"].str.lower().eq(stock_group.lower())
         & transaction_df["Code name"].eq(stock_class)
     ]
 
@@ -100,16 +164,13 @@ def extract_transaction_data(stock_cat: str, stock_id: str, stock_class: str) ->
             "purchases": [build_purchase_entry(stock_cat, 0, 0)],
         }
 
-    head_sold = filtered_df["Quantity"].sum()
-    sale_weight = (
-        sum(filtered_df["Average liveweight (kg/hd)"] * filtered_df["Quantity"])
-        / head_sold
-        if head_sold
-        else 0
-    )
+    sales_df = filtered_df.loc[filtered_df["Transaction type"] == "Sale"]
     transaction_data = {
-        "headSold": head_sold,
-        "saleWeight": sale_weight,
+        "headSold": sales_df["Quantity"].sum(),
+        "saleWeight": safe_ratio(
+            sum(sales_df["Average liveweight (kg/hd)"] * sales_df["Quantity"]),
+            sales_df["Quantity"].sum(),
+        ),
         "purchases": [],
     }
 
@@ -129,39 +190,54 @@ def extract_transaction_data(stock_cat: str, stock_id: str, stock_class: str) ->
     return transaction_data
 
 
+# Payload key -> the "Annual Data - Breed" column header it reads.
+#
+# The marking rate is published under a different name per species, from the
+# same sheet column -- that is the fact being recorded here, not duplication.
+# SEASONAL_LAMBING_KEY is sheep-only: cattle have no counterpart, and
+# beef_annual_data carries no such key, so it must never be written to a beef
+# group. extract_annual_data is what enforces that.
+MARKING_RATE_KEY = {"sheep": "ewesLambing", "beef": "cowsCalving"}
+SEASONAL_LAMBING_KEY = "seasonalLambing"
+
+BREED_RATE_COLUMNS = {
+    "ewesLambing": "Proportion of ewes lambing/cows calving {season}",
+    "cowsCalving": "Lambs/Calfs marking Rate {season}",
+    SEASONAL_LAMBING_KEY: "Lambs/Calfs marking Rate {season}",
+}
+
+
+def extract_breed_rate(stock_group: str, key: str) -> dict:
+    """One four-season rate block from "Annual Data - Breed".
+
+    Columns are matched by name, so the sheet's physical Autumn/Spring/Summer/
+    Winter order maps correctly onto SEASONS whatever order SEASONS is in. A
+    stock group with no row on the sheet reads as zeros.
+    """
+    template = BREED_RATE_COLUMNS[key]
+    breeds = breed_table()
+    present = stock_group in breeds.index
+    return {
+        key: {
+            season: (
+                breeds.loc[stock_group, template.format(season=season.capitalize())]
+                if present
+                else 0
+            )
+            for season in SEASONS
+        }
+    }
+
+
 def extract_lambing_calving_rate(stock_group: str) -> dict:
-    path = glob.glob(os.path.join("input", "*.xlsm"))
-    reproduction_df = pd.read_excel(path[0], "Annual Data - Breed")
-    reproduction_df.set_index(reproduction_df.columns[0], inplace=True)
-    if "sheep" in stock_group.lower():
-        repro = "ewesLambing"
-    else:
-        repro = "cowsCalving"
+    """The marking-rate block, under the key matching the group's species.
 
-    reproduction_data = {repro: {}}
-    for s in SEASONS:
-        if stock_group in reproduction_df.index:
-            reproduction_data[repro][s] = reproduction_df.loc[stock_group, f"Lambs/Calfs marking Rate {s.capitalize()}"]
-        else:
-            reproduction_data[repro][s] = 0
-
-    return reproduction_data
-
-
-def extract_seasonalLambing_rate(stock_group: str) -> dict:
-    path = glob.glob(os.path.join("input", "*.xlsm"))
-    reproduction_df = pd.read_excel(path[0], "Annual Data - Breed")
-    reproduction_df.set_index(reproduction_df.columns[0], inplace=True)
-
-    metric = "seasonalLambing"
-    lambing_data = {metric: {}}
-    for s in SEASONS:
-        if stock_group in reproduction_df.index:
-            lambing_data[metric][s] = reproduction_df.loc[stock_group, f"Proportion of ewes lambing/cows calving {s.capitalize()}"]
-        else:
-            lambing_data[metric][s] = 0
-
-    return lambing_data
+    NOTE: the species is recovered by looking for "sheep" in the group label,
+    even though every caller already knows it -- so a beef breed whose name
+    contained "sheep" would be published as ewesLambing.
+    """
+    key = "ewesLambing" if "sheep" in stock_group.lower() else "cowsCalving"
+    return extract_breed_rate(stock_group, key)
 
 
 def build_purchase_entry(stock, head, weight, source="Dairy origin"):
@@ -171,116 +247,86 @@ def build_purchase_entry(stock, head, weight, source="Dairy origin"):
     return entry
 
 
-def extract_lime_data(
+def extract_column_data(
     json_data: dict,
-    row: tuple,
+    row: pd.Series,
     livestock: str,
     group: int = 0,
 ) -> dict:
-    json_data[livestock][group]["limestone"] = row[1]
-    json_data[livestock][group]["limestoneFraction"] = row[2]
+    """Apply the straight column->field tables to one group.
+    For lime, fuel, supplementation and chemical extractors,
+    """
+    entry = json_data[livestock][group]
+
+    for key, column in ANNUAL_SCALAR_COLUMNS.items():
+        entry[key] = row.loc[column]
+    for key, columns in ANNUAL_NESTED_COLUMNS.items():
+        entry[key] = {sub: row.loc[column] for sub, column in columns.items()}
 
     return json_data
 
 
 def extract_fertiliser_data(
     json_data: dict,
-    row: tuple,
+    row: pd.Series,
     livestock: str,
     group: int = 0,
 ) -> dict:
     json_data[livestock][group]["fertiliser"] = {
-        "singleSuperphosphate": row[3],
-        "pastureDryland": row[4],  # Urea pasture
+        "singleSuperphosphate": row.loc["SSP"],
+        "pastureDryland": row.loc["Urea Pasture"],
         "pastureIrrigated": 0,
         "cropsDryland": 0,  # Urea crop
         "cropsIrrigated": 0,
         "otherFertilisers": [],
     }
 
-    for i in range(6, 20):
+    for key, col in OTHER_N_FERTILISERS.items():
         json_data[livestock][group]["fertiliser"]["otherFertilisers"].append(
             {
-                "otherDryland": row[i],
+                "otherDryland": row.loc[col],
                 "otherIrrigated": 0,  # Assuming no irrigated data for other fertilisers
-                "otherType": OTHER_N_FERTILISERS[i - 6],
+                "otherType": key,
             }
         )
 
     return json_data
 
 
-def extract_fuel_data(
-    json_data: dict,
-    row: tuple,
-    livestock: str,
-    group: int = 0,
-) -> dict:
-    json_data[livestock][group]["diesel"] = row[20]
-
-    json_data[livestock][group]["petrol"] = row[21]
-
-    json_data[livestock][group]["lpg"] = row[22]
-
-    return json_data
-
-
-def extract_supplementation_data(
-    json_data: dict,
-    row: tuple,
-    livestock: str,
-    group: int = 0,
-) -> dict:
-    json_data[livestock][group]["mineralSupplementation"] = {
-        "mineralBlock": row[23],
-        "mineralBlockUrea": row[24],
-        "weanerBlock": row[25],
-        "weanerBlockUrea": row[26],
-        "drySeasonMix": row[27],
-        "drySeasonMixUrea": row[28],
-    }
-
-    return json_data
-
-
 def extract_electricity_data(
     json_data: dict,
-    row: tuple,
+    row: pd.Series,
     livestock: str,
     group: int = 0,
 ) -> dict:
-    json_data[livestock][group]["electricitySource"] = (
-        row[29] if row[29] else "State Grid"
+    json_data[livestock][group]["electricitySource"] = row.loc["Electricity source"]
+    if row.loc["Electricity source"] != "Renewable":
+        json_data[livestock][group]["electricityRenewable"] = (
+            row.loc["% of electricity from renewable source"]
+            if pd.notna(row.loc["% of electricity from renewable source"])
+            else 0
+        )
+    json_data[livestock][group]["electricityUse"] = (
+        row.loc["Annual Electricity Use (total) (KWh)"]
+        if pd.notna(row.loc["Annual Electricity Use (total) (KWh)"])
+        else 0
     )
-    if row[29] != "Renewable":
-        json_data[livestock][group]["electricityRenewable"] = row[30]
-    json_data[livestock][group]["electricityUse"] = row[31]
 
     return json_data
 
 
 def extract_feed_data(
     json_data: dict,
-    row: tuple,
+    row: pd.Series,
     livestock: str,
     group: int = 0,
 ) -> dict:
-    json_data[livestock][group]["grainFeed"] = row[32]
-    json_data[livestock][group]["hayFeed"] = row[33]
+    json_data[livestock][group]["grainFeed"] = row.loc["Grain purchased for feed (t)"]
+    json_data[livestock][group]["hayFeed"] = row.loc["Hay purchased for feed (t)"]
     if livestock == "beef":
-        json_data[livestock][group]["cottonseedFeed"] = row[34]
-
-    return json_data
-
-
-def extract_chemical_data(
-    json_data: dict,
-    row: tuple,
-    livestock: str,
-    group: int = 0,
-) -> dict:
-    json_data[livestock][group]["herbicide"] = row[35]
-    json_data[livestock][group]["herbicideOther"] = row[36]
+        json_data[livestock][group]["cottonseedFeed"] = row.loc[
+            "Cotton seed for cattle (t)"
+        ]
 
     return json_data
 
@@ -290,16 +336,19 @@ def extract_merino_pct(
     livestock: str,
     group: int = 0,
 ) -> dict:
-    path = glob.glob(os.path.join("input", "*.xlsm"))
-    transaction_df = pd.read_excel(path[0], "Transaction")
+    transaction_df = transaction_table()
 
+    # NOTE: a third way of building the group key, and the only one that folds
+    # neither side's case. The pd.isna guard also never fires -- "id" is always
+    # a str -- so a blank id yields a trailing space. Left as-is deliberately:
+    # see the note in extract_transaction_data.
     stock_group = livestock + (
-        " " + json_data[livestock][group]["id"]
-        if not pd.isna(json_data[livestock][group]["id"])
+        (" " + json_data[livestock][group]["id"].lower())
+        if json_data[livestock][group]["id"] != ""
         else ""
     )
     filtered_df = transaction_df.loc[
-        transaction_df["Stock group"].eq(stock_group)
+        transaction_df["Stock group"].str.lower().eq(stock_group)
         & transaction_df["Transaction type"].eq("Purchase")
     ]
 
@@ -307,54 +356,54 @@ def extract_merino_pct(
         json_data[livestock][group]["merinoPercent"] = 0
         return json_data
 
-    total_head = filtered_df["Quantity"].sum()
-    merino_pct = (
-        filtered_df["Merino sheep purchased (head)"].sum() / total_head
-        if total_head
-        else 0
+    json_data[livestock][group]["merinoPercent"] = safe_ratio(
+        filtered_df["Merino sheep purchased (head)"].sum(),
+        filtered_df["Quantity"].sum(),
     )
-    json_data[livestock][group]["merinoPercent"] = merino_pct
 
     return json_data
 
 
+# Applied in order to every matching "Annual Data - Enterprise" row. Each
+# mutates json_data[species][group] in place.
 ANNUAL_DATA_EXTRACTORS = (
-    extract_lime_data,
+    extract_column_data,
     extract_fertiliser_data,
-    extract_fuel_data,
-    extract_supplementation_data,
     extract_electricity_data,
     extract_feed_data,
-    extract_chemical_data,
 )
 
 
-def extract_annual_data(inventory_sheet: Workbook, livestock: "Livestock") -> dict:
-    annual_sheet = inventory_sheet["Annual Data - Enterprise"]
+def extract_annual_data(livestock: "Livestock") -> dict:
+    annual_sheet = read_sheet("Annual Data - Enterprise")
     json_data = livestock.metadata
 
     for group in json_data[livestock.species]:
         group.update(deepcopy(ANNUAL_DATA_DEFAULTS[livestock.species]))
 
-    for row in annual_sheet.iter_rows(
-        min_row=2, min_col=1, max_col=48, values_only=True
-    ):
-        if row[0] is None or row[0] == 0:
+    for i, row in annual_sheet.iterrows():
+        if pd.isna(row.loc["Stock category"]):
             break
 
-        stock_cat = row[0]
+        stock_cat = row.loc["Stock category"]
         if stock_cat not in livestock.ids:
             continue
         i = livestock.ids.index(stock_cat)
         for extractor in ANNUAL_DATA_EXTRACTORS:
-            json_data = extractor(json_data, row, livestock.species, i)
+            extractor(json_data, row, livestock.species, i)
 
-    if livestock.species == "sheep":
-        # merinoPercent depends only on the Transaction sheet, not on any
-        # Annual Data row, so it's computed once per group here rather than
-        # inside the row loop above -- otherwise a group with zero matching
-        # Annual Data rows would never get merinoPercent set at all.
-        for i in range(len(json_data[livestock.species])):
-            json_data = extract_merino_pct(json_data, livestock.species, i)
+    # Per-group fields, computed after the row loop because they come from
+    # other sheets and so must land on every group, including ones with no
+    # Annual Data row of their own.
+    species = livestock.species
+    for i, group in enumerate(json_data[species]):
+        # Matches "Annual Data - Breed" column A, which is "<Category> <Breed>".
+        label = f"{species.capitalize()} {group['id']}"
+        group.update(extract_breed_rate(label, MARKING_RATE_KEY[species]))
+        if species == "sheep":
+            # seasonalLambing and merinoPercent are sheep-only -- beef has no
+            # such keys in its payload template.
+            group.update(extract_breed_rate(label, SEASONAL_LAMBING_KEY))
+            extract_merino_pct(json_data, species, i)
 
     return json_data

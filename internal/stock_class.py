@@ -68,23 +68,25 @@ class Beef(Livestock):
         super().__init__("beef", beef_stock_classes, group, ids=ids)
 
 
-def create_sheep_json_data(
-    inventory_sheet, group: int = 1, ids: list[str] | None = None
+LIVESTOCK_CLASSES = {"sheep": Sheep, "beef": Beef}
+
+
+def create_json_data(
+    species: str, group: int = 1, ids: list[str] | None = None
 ) -> dict:
-    sheep = Sheep(group, ids)
-    seasonal_sheep = extract_seasonal_data(inventory_sheet)
-    sheep.stock_class_data(seasonal_sheep)
-    sheep.metadata = extract_annual_data(inventory_sheet, sheep)
+    """Build one species' branch of the payload."""
+    livestock = LIVESTOCK_CLASSES[species](group, ids)
+    livestock.stock_class_data(extract_seasonal_data(species))
+    livestock.metadata = extract_annual_data(livestock)
 
-    return sheep.metadata
+    return livestock.metadata
 
 
-def create_beef_json_data(
-    inventory_sheet, group: int = 1, ids: list[str] | None = None
-) -> dict:
-    beef = Beef(group, ids)
-    seasonal_beef = extract_seasonal_data(inventory_sheet)
-    beef.stock_class_data(seasonal_beef)
-    beef.metadata = extract_annual_data(inventory_sheet, beef)
+# Thin wrappers over create_json_data. Worth keeping: they bind one string and
+# restate nothing, and they are what main.py and the tests already call.
+def create_sheep_json_data(group: int = 1, ids: list[str] | None = None) -> dict:
+    return create_json_data("sheep", group, ids)
 
-    return beef.metadata
+
+def create_beef_json_data(group: int = 1, ids: list[str] | None = None) -> dict:
+    return create_json_data("beef", group, ids)
