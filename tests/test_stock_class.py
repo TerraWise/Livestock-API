@@ -14,7 +14,13 @@ from internal.stock_class import (
     create_sheep_json_data,
 )
 
-from tests.conftest import annual_row, make_workbook, seasonal_row
+from tests.conftest import (
+    CATTLE_ENTERPRISE,
+    SHEEP_ENTERPRISE,
+    annual_row,
+    breed_row,
+    seasonal_row,
+)
 
 
 class TestLivestockInit:
@@ -156,45 +162,58 @@ class TestStockClassData:
 
 
 class TestCreateJsonDataEndToEnd:
+    """End-to-end shape, mirroring how main.py builds its id lists.
+
+    Group 0 is always the enterprise pseudo-group -- it is the only id that
+    appears in "Annual Data - Enterprise", so it is the group annual figures
+    land on. Breed groups follow, and they are the ones that carry seasonal
+    stock-class rows. No group has both.
+    """
+
     def test_create_beef_json_data(
-        self, mock_transaction_glob, transaction_xlsx_factory
+        self, mock_transaction_glob, input_xlsx_factory
     ):
-        mock_transaction_glob(transaction_xlsx_factory([]))
-        wb = make_workbook(
-            {
-                "Seasonal Data": [
+        mock_transaction_glob(
+            input_xlsx_factory(
+                seasonal=[
                     seasonal_row(
                         stock="beef",
-                        stock_id="GroupA",
+                        stock_id="Angus",
                         stock_class="cowsGt2",
                         head=(50, 50, 50, 50),
                     ),
                 ],
-                "Annual Data": [
-                    annual_row(stock="beef", id_value="GroupA", diesel=1000)
-                ],
-            }
+                annual=[annual_row(stock_cat=CATTLE_ENTERPRISE, diesel=1000)],
+            )
         )
-        result = create_beef_json_data(wb, group=1, ids=["GroupA"])
-        entry = result["beef"][0]
-        assert entry["id"] == "GroupA"
-        assert set(entry["classes"].keys()) == set(beef_stock_classes)
-        assert entry["classes"]["cowsGt2"]["autumn"]["head"] == 50
-        assert entry["diesel"] == 1000
-        assert "cowsCalving" in entry
-        assert "seasonalLambing" not in entry
-        assert "merinoPercent" not in entry
+        result = create_beef_json_data(group=2, ids=[CATTLE_ENTERPRISE, "Angus"])
 
-    def test_create_sheep_json_data(
-        self, mock_transaction_glob, transaction_xlsx_factory
-    ):
-        mock_transaction_glob(transaction_xlsx_factory([]))
-        wb = make_workbook(
-            {
-                "Seasonal Data": [
+        enterprise, breed = result["beef"]
+        assert enterprise["id"] == CATTLE_ENTERPRISE
+        assert enterprise["diesel"] == 1000
+
+        assert breed["id"] == "Angus"
+        assert set(breed["classes"].keys()) == set(beef_stock_classes)
+        assert breed["classes"]["cowsGt2"]["autumn"]["head"] == 50
+        # No Annual Data row of its own, so annual fields keep their defaults.
+        assert breed["diesel"] == 0
+
+        for entry in result["beef"]:
+            assert "cowsCalving" in entry
+            assert "seasonalLambing" not in entry
+            assert "merinoPercent" not in entry
+
+    def test_create_sheep_json_data(self, mock_transaction_glob, input_xlsx_factory):
+        # seasonalLambing reads the "Lambs/Calfs marking Rate" column (the
+        # `marking=` argument here) -- see the AIA-shape note on
+        # TestExtractLambingCalvingRate in test_inv_extraction.py for why it
+        # doesn't share ewesLambing's column.
+        mock_transaction_glob(
+            input_xlsx_factory(
+                seasonal=[
                     seasonal_row(
                         stock="sheep",
-                        stock_id="GroupA",
+                        stock_id="Merino",
                         stock_class="breedingEwes",
                         head=(100, 100, 100, 100),
                         head_shorn=100,
@@ -202,52 +221,58 @@ class TestCreateJsonDataEndToEnd:
                         clean_wool_yield=0.9,
                     ),
                 ],
-                "Annual Data": [
-                    annual_row(
-                        id_value="GroupA", diesel=500, seasonal_lambing=(1, 2, 3, 4)
-                    )
-                ],
-            }
+                annual=[annual_row(stock_cat=SHEEP_ENTERPRISE, diesel=500)],
+                breeds=[breed_row(stock_group="Sheep Merino", marking=(1, 2, 3, 4))],
+            )
         )
-        result = create_sheep_json_data(wb, group=1, ids=["GroupA"])
-        entry = result["sheep"][0]
-        assert entry["id"] == "GroupA"
-        assert set(entry["classes"].keys()) == set(sheep_stock_classes)
-        assert entry["classes"]["breedingEwes"]["autumn"]["head"] == 100
-        assert entry["classes"]["breedingEwes"]["headShorn"] == 100
-        assert entry["diesel"] == 500
-        assert "ewesLambing" in entry
-        assert entry["seasonalLambing"] == {
+        result = create_sheep_json_data(group=2, ids=[SHEEP_ENTERPRISE, "Merino"])
+
+        enterprise, breed = result["sheep"]
+        assert enterprise["id"] == SHEEP_ENTERPRISE
+        assert enterprise["diesel"] == 500
+
+        assert breed["id"] == "Merino"
+        assert set(breed["classes"].keys()) == set(sheep_stock_classes)
+        assert breed["classes"]["breedingEwes"]["autumn"]["head"] == 100
+        assert breed["classes"]["breedingEwes"]["headShorn"] == 100
+
+        # Rate columns are matched by name, so the sheet's Autumn/Spring/Summer/
+        # Winter layout maps onto SEASONS' autumn/winter/spring/summer order.
+        assert breed["seasonalLambing"] == {
             "autumn": 1,
-            "winter": 2,
-            "spring": 3,
-            "summer": 4,
+            "winter": 4,
+            "spring": 2,
+            "summer": 3,
         }
-        assert entry["merinoPercent"] == 0
+        for entry in result["sheep"]:
+            assert "ewesLambing" in entry
+            assert entry["merinoPercent"] == 0
 
     def test_multi_group_id_isolation_missing_annual_row_for_one_group(
-        self, mock_transaction_glob, transaction_xlsx_factory
+        self, mock_transaction_glob, input_xlsx_factory
     ):
-        mock_transaction_glob(transaction_xlsx_factory([]))
-        wb = make_workbook(
-            {
-                "Seasonal Data": [
+        mock_transaction_glob(
+            input_xlsx_factory(
+                seasonal=[
                     seasonal_row(
-                        stock="sheep", stock_id="GroupA", stock_class="breedingEwes"
+                        stock="sheep", stock_id="Merino", stock_class="breedingEwes"
                     ),
                     seasonal_row(
-                        stock="sheep", stock_id="GroupB", stock_class="breedingEwes"
+                        stock="sheep", stock_id="XB", stock_class="breedingEwes"
                     ),
                 ],
-                "Annual Data": [annual_row(id_value="GroupA")],
-            }
+                annual=[annual_row(stock_cat=SHEEP_ENTERPRISE, diesel=750)],
+            )
         )
-        result = create_sheep_json_data(wb, group=2, ids=["GroupA", "GroupB"])
-        # GroupA has an Annual Data row: gets both row-derived fields and merinoPercent.
-        assert "merinoPercent" in result["sheep"][0]
-        assert "diesel" in result["sheep"][0]
-        # GroupB has no Annual Data row: row-derived fields like diesel keep
-        # their zeroed default, and merinoPercent is computed independently of
-        # any Annual Data row, so it's present (defaulting to 0) too.
-        assert result["sheep"][1]["merinoPercent"] == 0
-        assert result["sheep"][1]["diesel"] == 0
+        result = create_sheep_json_data(
+            group=3, ids=[SHEEP_ENTERPRISE, "Merino", "XB"]
+        )
+        # Only the enterprise group has an Annual Data row, so only it gets the
+        # row-derived figures.
+        assert result["sheep"][0]["diesel"] == 750
+        # The breed groups keep the zeroed defaults rather than being left
+        # without the key at all -- and merinoPercent is computed per group,
+        # independently of any Annual Data row, so every group still has it.
+        for entry in result["sheep"][1:]:
+            assert entry["diesel"] == 0
+            assert entry["merinoPercent"] == 0

@@ -71,7 +71,7 @@ def test_extract_veg_data_happy_path_two_complete_rows():
 
 
 def test_extract_veg_data_row_zero_incomplete_yields_empty_list():
-    incomplete = veg_row()[:-1] + (None,)  # age missing
+    incomplete = veg_row(age=None)
     wb = make_workbook({"🌿 Vegetation": [incomplete]})
     result = extract_veg_data(wb)
     assert result == {"vegetation": []}
@@ -79,7 +79,7 @@ def test_extract_veg_data_row_zero_incomplete_yields_empty_list():
 
 def test_extract_veg_data_later_row_incomplete_stops_without_a_default():
     complete = veg_row(region="South West", area=52, age=6)
-    incomplete = veg_row()[:-1] + (None,)
+    incomplete = veg_row(age=None)
     wb = make_workbook({"🌿 Vegetation": [complete, incomplete]})
     result = extract_veg_data(wb)
     assert result == {
@@ -91,3 +91,43 @@ def test_extract_veg_data_truly_empty_sheet_yields_empty_list():
     wb = make_workbook({"🌿 Vegetation": []})
     result = extract_veg_data(wb)
     assert result == {"vegetation": []}
+
+
+def test_extract_veg_data_reads_beef_and_sheep_proportion_columns():
+    # The sheet cell holds one number, not a list -- vegetation_planting only
+    # wraps in [0] on its own None default, so a real value passes through as
+    # the scalar it is.
+    wb = make_workbook(
+        {
+            "🌿 Vegetation": [
+                veg_row(
+                    region="South West",
+                    area=52,
+                    age=6,
+                    beef_proportion=0.4,
+                    sheep_proportion=0.6,
+                ),
+            ]
+        }
+    )
+    result = extract_veg_data(wb)
+    assert result == {
+        "vegetation": [
+            vegetation_planting(
+                region="South West",
+                area=52,
+                age=6,
+                beef_proportion=0.4,
+                sheep_proportion=0.6,
+            )
+        ]
+    }
+
+
+def test_extract_veg_data_omitted_proportions_default_to_zero():
+    wb = make_workbook(
+        {"🌿 Vegetation": [veg_row(region="South West", area=52, age=6)]}
+    )
+    result = extract_veg_data(wb)
+    assert result["vegetation"][0]["beefProportion"] == [0]
+    assert result["vegetation"][0]["sheepProportion"] == [0]
