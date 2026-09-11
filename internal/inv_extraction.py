@@ -192,8 +192,12 @@ def extract_transaction_data(stock_cat: str, stock_id: str, stock_class: str) ->
 
 # Payload key -> the "Annual Data - Breed" column header it reads.
 #
-# The marking rate is published under a different name per species, from the
-# same sheet column -- that is the fact being recorded here, not duplication.
+# cowsCalving reads the marking-rate column under a beef-specific payload key
+# -- there is no other beef reproduction rate, so no duplication there.
+# ewesLambing deliberately reads a DIFFERENT column ("Proportion of ewes
+# lambing/cows calving") rather than sharing cowsCalving's: this is a
+# workaround for how the AIA endpoint wants sheep reproduction data shaped,
+# not a mistake -- do not "fix" it to match cowsCalving's column.
 # SEASONAL_LAMBING_KEY is sheep-only: cattle have no counterpart, and
 # beef_annual_data carries no such key, so it must never be written to a beef
 # group. extract_annual_data is what enforces that.
