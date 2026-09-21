@@ -129,7 +129,7 @@ def extract_wool_row_data(r: pd.Series) -> dict:
     return {
         "headShorn": r.loc["Head shorn (hd)"],
         "woolShorn": r.loc["Wool shorn (kg/hd)"],
-        "cleanWoolYield": r.loc["Clean wool yield (%)"],
+        "cleanWoolYield": r.loc["Clean wool yield (%)"] * 100,
     }
 
 
